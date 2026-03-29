@@ -914,33 +914,54 @@
               <div>
                 <h2 class="text-base font-semibold" style="color: var(--text-primary)">Who to Look For</h2>
                 <p class="text-xs mt-0.5" style="color: var(--text-muted)">
-                  Add the names of people who send you loan repayments via Monzo.
-                  We'll automatically match their payments by name, amount, and date (&#177;2 days).
+                  Add the names of people who send you loan repayments. We search across
+                  Name, Description, and Notes columns in your Monzo sheet.
                 </p>
               </div>
 
-              <!-- Add new name -->
-              <div class="flex gap-2 items-end">
-                <div class="flex-1">
-                  <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Label</label>
-                  <input type="text" class="admin-input" placeholder="e.g. Mum" x-model="newNameLabel" @keydown.enter="addName()" />
+              <!-- Add new name — dropdown + custom -->
+              <div class="space-y-3">
+                <div>
+                  <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Choose a sender</label>
+                  <select class="admin-input" x-model="newNameSource" @change="onNameSourceChange()">
+                    <option value="">Select...</option>
+                    <template x-for="preset in presetNames" :key="preset.pattern">
+                      <option :value="preset.pattern" x-text="preset.label"></option>
+                    </template>
+                    <option value="custom">Custom...</option>
+                  </select>
                 </div>
-                <div class="flex-1">
-                  <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Search name for</label>
-                  <input type="text" class="admin-input" placeholder="e.g. LIM" x-model="newNamePattern" @keydown.enter="addName()" />
+
+                <!-- Custom fields (shown when "Custom" selected) -->
+                <div x-show="newNameSource === 'custom'" x-transition class="space-y-2">
+                  <div>
+                    <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Label (who is this?)</label>
+                    <input type="text" class="admin-input" placeholder="e.g. Mum, Dad, Auntie" x-model="newNameLabel" />
+                  </div>
+                  <div>
+                    <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Search text (appears in Name, Description, or Notes)</label>
+                    <input type="text" class="admin-input" placeholder="e.g. LIM, NATIONW" x-model="newNamePattern" @keydown.enter="addName()" />
+                  </div>
                 </div>
-                <button @click="addName()" class="btn-primary shrink-0" style="width: auto; padding: 0.625rem 1rem;" :disabled="!newNameLabel.trim() || !newNamePattern.trim()">
-                  Add
+
+                <button
+                  @click="addName()"
+                  class="btn-primary"
+                  style="width: auto; padding: 0.625rem 1.25rem;"
+                  :disabled="!newNameLabel.trim() || !newNamePattern.trim()"
+                >
+                  + Add Sender
                 </button>
               </div>
 
               <!-- Existing names -->
               <div class="space-y-2" x-show="monzoNames.length > 0">
+                <p class="text-xs font-medium" style="color: var(--text-muted)">Active senders:</p>
                 <template x-for="name in monzoNames" :key="name.id">
-                  <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background: var(--bg-base); border: 1px solid var(--border);">
-                    <div class="flex items-center gap-3">
+                  <div class="flex items-center justify-between py-2.5 px-3 rounded-lg" style="background: var(--bg-base); border: 1px solid var(--border); border-left: 3px solid #6366f1;">
+                    <div class="flex items-center gap-3 flex-wrap">
                       <span class="text-sm font-semibold" style="color: var(--text-primary)" x-text="name.label"></span>
-                      <span class="text-xs font-mono px-2 py-0.5 rounded" style="background: rgba(99,102,241,0.08); color: #6366f1" x-text="'looks for: ' + name.name_pattern"></span>
+                      <span class="text-xs font-mono px-2 py-0.5 rounded" style="background: rgba(99,102,241,0.08); color: #6366f1" x-text="'searches for: ' + name.name_pattern"></span>
                     </div>
                     <button @click="removeName(name.id)" class="text-xs px-2 py-1 rounded-lg transition-colors" style="color: var(--text-muted)" title="Remove">&#215;</button>
                   </div>
@@ -949,13 +970,16 @@
 
               <!-- Empty state -->
               <p x-show="monzoNames.length === 0" class="text-sm text-center py-3" style="color: var(--text-muted)">
-                No names configured yet. Add someone above to start matching.
+                No senders configured yet. Add someone above to start matching.
               </p>
 
-              <!-- How it works explainer -->
+              <!-- How it works -->
               <div class="text-xs leading-relaxed p-3 rounded-lg" style="background: rgba(99,102,241,0.04); border: 1px solid rgba(99,102,241,0.1); color: var(--text-muted)">
                 <strong style="color: var(--text-primary)">How matching works:</strong>
-                When a payment is recorded, we search your Monzo sheet for a "Faster payment" where the Name contains your search text, the amount matches, and the date is within 2 days. Each Monzo transaction can only match once (tracked by Transaction ID).
+                When a payment is recorded, we search your Monzo sheet for a Faster Payment where the
+                <strong>Name</strong>, <strong>Description</strong>, or <strong>Notes</strong> contain your search text,
+                the <strong>amount matches</strong> (within &#163;0.02), and the <strong>date is within 7 days</strong>.
+                Each Monzo transaction can only match once (tracked by Transaction ID).
               </div>
             </div>
 

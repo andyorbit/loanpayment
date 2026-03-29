@@ -311,6 +311,24 @@ document.addEventListener('alpine:init', () => {
     monzoSyncResult: null,
     newNameLabel: '',
     newNamePattern: '',
+    newNameSource: '',  // dropdown value: preset name or 'custom'
+    presetNames: [
+      { label: 'Bernard Y J Lim', pattern: 'Bernard Y J Lim' },
+      { label: 'Mum N Dad Nationwide', pattern: 'Mum N Dad Nationwide' },
+    ],
+
+    onNameSourceChange() {
+      if (this.newNameSource === 'custom') {
+        this.newNameLabel = '';
+        this.newNamePattern = '';
+      } else if (this.newNameSource) {
+        const preset = this.presetNames.find(p => p.pattern === this.newNameSource);
+        if (preset) {
+          this.newNameLabel = preset.label;
+          this.newNamePattern = preset.pattern;
+        }
+      }
+    },
 
     async fetchMonzoConfig() {
       this.monzoLoading = true;
