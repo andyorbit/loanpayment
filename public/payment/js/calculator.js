@@ -243,9 +243,6 @@
       currentPacePayment: 0, // inferred "current pace" (avg monthly)
       currentPaceResult: null,
 
-      // Dark mode (synced from html class)
-      darkMode: localStorage.getItem('darkMode') === 'true',
-
       // Slider
       sliderValue: 200,
       sliderMin: 50,
@@ -301,7 +298,6 @@
       // ── Lifecycle ────────────────────────────────────────────
 
       async init() {
-        this._applyDarkMode();
         await this.fetchStatus();
       },
 
@@ -394,20 +390,13 @@
       // ── Dark mode ────────────────────────────────────────────
 
       toggleDarkMode() {
-        this.darkMode = !this.darkMode;
-        localStorage.setItem('darkMode', String(this.darkMode));
-        this._applyDarkMode();
+        document.documentElement.classList.toggle('dark');
+        const isDark = document.documentElement.classList.contains('dark');
+        localStorage.setItem('darkMode', String(isDark));
+        // Update charts if they exist
         setTimeout(() => {
           this._drawChart();
-        }, 350);
-      },
-
-      _applyDarkMode() {
-        if (this.darkMode) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        }, 100);
       },
 
       // ── Formatters ───────────────────────────────────────────

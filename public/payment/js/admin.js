@@ -296,6 +296,7 @@ document.addEventListener('alpine:init', () => {
 
     /* ── Theme toggle ──────────────────────────────────────── */
     toggleDarkMode() {
+      document.documentElement.classList.toggle('dark');
       const isDark = document.documentElement.classList.contains('dark');
       localStorage.setItem('darkMode', String(isDark));
     },

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html
   lang="en"
-  x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }"
-  :class="{ 'dark': darkMode }"
+  x-data
+  :class="{ 'dark': localStorage.getItem('darkMode') === 'true' }"
 >
 <head>
   <meta charset="UTF-8" />
@@ -326,14 +326,14 @@
       <!-- Dark mode toggle (sidebar bottom) -->
       <div class="mt-auto pt-4 border-t" style="border-color: var(--border)">
         <button
-          @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)"
+          @click="document.documentElement.classList.toggle('dark'); localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'))"
           class="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
           style="color: var(--text-muted)"
           aria-label="Toggle dark mode"
         >
-          <span x-show="!darkMode" class="text-base">🌙</span>
-          <span x-show="darkMode"  class="text-base">☀️</span>
-          <span x-text="darkMode ? 'Light mode' : 'Dark mode'"></span>
+          <span x-show="!document.documentElement.classList.contains('dark')" class="text-base">🌙</span>
+          <span x-show="document.documentElement.classList.contains('dark')"  class="text-base">☀️</span>
+          <span x-text="document.documentElement.classList.contains('dark') ? 'Light mode' : 'Dark mode'"></span>
         </button>
       </div>
     </aside>
@@ -382,13 +382,13 @@
 
             <!-- Dark mode toggle (mobile) -->
             <button
-              @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)"
+              @click="document.documentElement.classList.toggle('dark'); localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'))"
               class="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl border transition-colors"
               style="border-color: var(--border); background: var(--bg-card)"
               aria-label="Toggle dark mode"
             >
-              <span x-show="!darkMode" class="text-base">🌙</span>
-              <span x-show="darkMode"  class="text-base">☀️</span>
+              <span x-show="!document.documentElement.classList.contains('dark')" class="text-base">🌙</span>
+              <span x-show="document.documentElement.classList.contains('dark')"  class="text-base">☀️</span>
             </button>
           </div>
         </header>

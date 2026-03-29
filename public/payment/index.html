@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html
   lang="en"
-  x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }"
-  :class="{ 'dark': darkMode }"
+  x-data
+  :class="{ 'dark': localStorage.getItem('darkMode') === 'true' }"
 >
 <head>
   <meta charset="UTF-8" />
@@ -101,14 +101,14 @@
       <!-- Dark mode toggle (sidebar bottom) -->
       <div class="mt-auto pt-4 border-t" style="border-color: var(--border)">
         <button
-          @click="darkMode = !darkMode; toggleDarkMode()"
+          @click="document.documentElement.classList.toggle('dark'); localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'))"
           class="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
           style="color: var(--text-muted)"
           aria-label="Toggle dark mode"
         >
-          <span x-show="!darkMode" class="text-base">🌙</span>
-          <span x-show="darkMode"  class="text-base">☀️</span>
-          <span x-text="darkMode ? 'Light mode' : 'Dark mode'"></span>
+          <span x-show="!document.documentElement.classList.contains('dark')" class="text-base">🌙</span>
+          <span x-show="document.documentElement.classList.contains('dark')"  class="text-base">☀️</span>
+          <span x-text="document.documentElement.classList.contains('dark') ? 'Light mode' : 'Dark mode'"></span>
         </button>
       </div>
     </aside>
@@ -146,13 +146,13 @@
 
           <!-- Dark mode toggle (mobile/tablet) -->
           <button
-            @click="darkMode = !darkMode; toggleDarkMode()"
+            @click="document.documentElement.classList.toggle('dark'); localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'))"
             class="lg:hidden flex items-center justify-center w-10 h-10 rounded-xl border transition-colors"
             style="border-color: var(--border); background: var(--bg-card)"
             aria-label="Toggle dark mode"
           >
-            <span x-show="!darkMode" class="text-lg">🌙</span>
-            <span x-show="darkMode"  class="text-lg">☀️</span>
+            <span x-show="!document.documentElement.classList.contains('dark')" class="text-lg">🌙</span>
+            <span x-show="document.documentElement.classList.contains('dark')"  class="text-lg">☀️</span>
           </button>
         </header>
 
@@ -341,6 +341,40 @@
                   class="pay-input resize-none"
                   style="font-family: var(--font-sans); font-size: 0.9rem;"
                 ></textarea>
+              </div>
+
+              <!-- Payment breakdown preview -->
+              <div x-show="paymentPreview" x-transition class="mt-3 p-3 rounded-xl" style="background: var(--bg-base); border: 1px solid var(--border);">
+                <p class="text-xs font-medium mb-2" style="color: var(--text-muted)">This payment breaks down as:</p>
+
+                <!-- Visual bar -->
+                <div class="flex h-3 rounded-full overflow-hidden mb-2">
+                  <div class="bg-green-500 transition-all duration-300" :style="'width: ' + (paymentPreview?.capitalPercent || 0) + '%'"></div>
+                  <div class="bg-amber-500 transition-all duration-300" :style="'width: ' + (paymentPreview?.interestPercent || 0) + '%'"></div>
+                </div>
+
+                <div class="flex justify-between text-xs">
+                  <div class="flex items-center gap-1.5">
+                    <div class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                    <span style="color: var(--text-muted)">Capital</span>
+                    <span class="font-mono font-medium" style="color: var(--text-primary)" x-text="'£' + paymentPreview?.capitalPortion"></span>
+                    <span class="font-mono" style="color: #16a34a" x-text="'(' + paymentPreview?.capitalPercent + '%)'"></span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <div class="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                    <span style="color: var(--text-muted)">Interest</span>
+                    <span class="font-mono font-medium" style="color: var(--text-primary)" x-text="'£' + paymentPreview?.interestPortion"></span>
+                    <span class="font-mono" style="color: #d97706" x-text="'(' + paymentPreview?.interestPercent + '%)'"></span>
+                  </div>
+                </div>
+
+                <!-- Encouragement message -->
+                <div x-show="paymentPreview && parseInt(paymentPreview.capitalPercent) >= 80" class="mt-2 text-xs font-medium" style="color: #16a34a">
+                  Great — most of this payment goes straight to reducing your loan!
+                </div>
+                <div x-show="paymentPreview && parseInt(paymentPreview.interestPercent) > 50" class="mt-2 text-xs font-medium" style="color: #d97706">
+                  Tip: A larger payment means more goes toward the loan itself, not interest.
+                </div>
               </div>
 
               <!-- Form error -->

@@ -11,10 +11,6 @@ document.addEventListener('alpine:init', () => {
     error: null,
     data: null,
 
-    // Dark mode (html-level class is bound separately; this
-    // component syncs for toggling and propagating to charts)
-    darkMode: localStorage.getItem('darkMode') === 'true',
-
     // Payment form
     showCustomDate: false,
     paymentAmount: '',
@@ -36,9 +32,6 @@ document.addEventListener('alpine:init', () => {
 
     // ── Lifecycle ─────────────────────────────────────────────
     async init() {
-      // Sync dark mode class on html element
-      this._applyDarkMode();
-
       await this.fetchDashboard();
 
       // Wait one tick for DOM, then draw charts
@@ -152,22 +145,39 @@ document.addEventListener('alpine:init', () => {
 
     // ── Dark mode ──────────────────────────────────────────────
     toggleDarkMode() {
-      this.darkMode = !this.darkMode;
-      localStorage.setItem('darkMode', String(this.darkMode));
-      this._applyDarkMode();
-      // Recreate charts with new colour scheme after short delay
-      setTimeout(() => {
-        if (window.PayCharts) PayCharts.updateTheme();
-        this.$nextTick(() => this.initCharts());
-      }, 350);
+      document.documentElement.classList.toggle('dark');
+      const isDark = document.documentElement.classList.contains('dark');
+      localStorage.setItem('darkMode', String(isDark));
+      // Update charts if they exist
+      if (window.PayCharts && typeof window.PayCharts.updateTheme === 'function') {
+        setTimeout(() => window.PayCharts.updateTheme(), 100);
+      }
     },
 
-    _applyDarkMode() {
-      if (this.darkMode) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+    // Computed: preview of interest vs capital split for current payment amount
+    get paymentPreview() {
+      const amount = parseFloat(this.paymentAmount);
+      if (!amount || amount <= 0 || !this.data) return null;
+
+      const balance = this.data.summary.outstandingBalance;
+      const rate = this.data.loan.annualRate;
+      const daysSinceLastPayment = this.data.streakData.daysSinceLastPayment || 0;
+
+      // Interest accrued since last payment
+      const dailyRate = rate / 365;
+      const interestAccrued = balance * dailyRate * daysSinceLastPayment;
+
+      const interestPortion = Math.min(amount, interestAccrued);
+      const capitalPortion = amount - interestPortion;
+      const interestPercent = amount > 0 ? (interestPortion / amount * 100) : 0;
+      const capitalPercent = amount > 0 ? (capitalPortion / amount * 100) : 0;
+
+      return {
+        interestPortion: interestPortion.toFixed(2),
+        capitalPortion: capitalPortion.toFixed(2),
+        interestPercent: interestPercent.toFixed(0),
+        capitalPercent: capitalPercent.toFixed(0)
+      };
     },
 
     // ── Computed helpers ───────────────────────────────────────
