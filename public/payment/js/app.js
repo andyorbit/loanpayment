@@ -159,15 +159,12 @@ document.addEventListener('alpine:init', () => {
       const amount = parseFloat(this.paymentAmount);
       if (!amount || amount <= 0 || !this.data) return null;
 
-      const balance = this.data.summary.outstandingBalance;
-      const rate = this.data.loan.annualRate;
-      const daysSinceLastPayment = this.data.streakData.daysSinceLastPayment || 0;
+      // Use the real accrued interest from the backend engine
+      // Standard loan repayment: payment covers accrued interest first,
+      // then remainder reduces principal
+      const accruedInterest = this.data.summary.accruedSinceLastPayment || 0;
 
-      // Interest accrued since last payment
-      const dailyRate = rate / 365;
-      const interestAccrued = balance * dailyRate * daysSinceLastPayment;
-
-      const interestPortion = Math.min(amount, interestAccrued);
+      const interestPortion = Math.min(amount, accruedInterest);
       const capitalPortion = amount - interestPortion;
       const interestPercent = amount > 0 ? (interestPortion / amount * 100) : 0;
       const capitalPercent = amount > 0 ? (capitalPortion / amount * 100) : 0;
@@ -176,7 +173,8 @@ document.addEventListener('alpine:init', () => {
         interestPortion: interestPortion.toFixed(2),
         capitalPortion: capitalPortion.toFixed(2),
         interestPercent: interestPercent.toFixed(0),
-        capitalPercent: capitalPercent.toFixed(0)
+        capitalPercent: capitalPercent.toFixed(0),
+        accruedInterest: accruedInterest.toFixed(2)
       };
     },
 

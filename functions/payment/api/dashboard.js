@@ -139,6 +139,7 @@ export async function onRequestGet(context) {
         outstandingBalance: parseFloat(result.currentBalance.toFixed(2)),
         totalPaid: parseFloat(result.totalPaid.toFixed(2)),
         totalInterest: parseFloat(result.totalInterest.toFixed(2)),
+        accruedSinceLastPayment: parseFloat(result.accruedSinceLastPayment.toFixed(2)),
         progressPercent: parseFloat(progressPercent),
         paymentCount: payments.length
       },
