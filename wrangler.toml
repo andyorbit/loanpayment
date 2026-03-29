@@ -5,4 +5,4 @@ pages_build_output_dir = "public"
 [[d1_databases]]
 binding = "DB"
 database_name = "pay-db"
-database_id = "placeholder"
+database_id = "cdd4f1b6-9c78-4972-8733-c7c9cbf33876"
