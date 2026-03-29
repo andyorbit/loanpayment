@@ -31,41 +31,70 @@
   }
 
   /**
-   * Project payoff schedule.
-   * @param {number} currentBalance
-   * @param {number} annualRate  e.g. 0.035 for 3.5%
-   * @param {number} monthlyPayment
-   * @param {number} lumpSum  one-off payment applied at month 0
+   * Project payoff schedule with correct interest-first repayment.
+   * @param {number} currentBalance - outstanding balance today
+   * @param {number} annualRate - e.g. 0.07 for 7%
+   * @param {number} monthlyPayment - regular monthly payment
+   * @param {Object[]} lumpSums - [{amount, monthOffset}] where monthOffset 0 = this month
    * @returns {{ payoffDate, totalInterest, months, snapshots }}
    */
-  function projectPayoff(currentBalance, annualRate, monthlyPayment, lumpSum) {
+  function projectPayoff(currentBalance, annualRate, monthlyPayment, lumpSums) {
     const monthlyRate = annualRate / 12;
-    let balance = Math.max(0, currentBalance - (lumpSum || 0));
+    let balance = currentBalance;
     let totalInterest = 0;
     const snapshots = [];
     let month = 0;
 
-    // Guard: if payment doesn't cover interest, we'd loop forever
-    const minPayment = balance * monthlyRate;
-    if (monthlyPayment <= minPayment && balance > 0) {
+    // Index lump sums by month for quick lookup
+    const lumpSumByMonth = {};
+    if (Array.isArray(lumpSums)) {
+      for (const ls of lumpSums) {
+        const m = ls.monthOffset || 0;
+        lumpSumByMonth[m] = (lumpSumByMonth[m] || 0) + ls.amount;
+      }
+    } else if (typeof lumpSums === 'number' && lumpSums > 0) {
+      // Backward compat: single number = lump sum at month 0
+      lumpSumByMonth[0] = lumpSums;
+    }
+
+    // Apply month-0 lump sum before the loop (reduces balance immediately)
+    if (lumpSumByMonth[0]) {
+      balance = Math.max(0, balance - lumpSumByMonth[0]);
+    }
+
+    // Guard: if monthly payment can't cover interest, loan never pays off
+    if (balance > 0 && monthlyPayment <= balance * monthlyRate) {
       return { payoffDate: null, totalInterest: null, months: null, snapshots: [] };
     }
 
     while (balance > 0.005 && month < 600) {
+      month++;
+
+      // 1. Calculate this month's interest on current balance
       const interest = round2(balance * monthlyRate);
       totalInterest += interest;
       balance += interest;
+
+      // 2. Apply regular monthly payment (interest first, then principal)
       const payment = round2(Math.min(monthlyPayment, balance));
       const principal = round2(payment - interest);
-      balance = round2(balance - payment);
-      month++;
+      balance = round2(Math.max(0, balance - payment));
+
+      // 3. Apply any lump sum scheduled for this month
+      let lumpApplied = 0;
+      if (lumpSumByMonth[month]) {
+        lumpApplied = Math.min(lumpSumByMonth[month], balance);
+        balance = round2(Math.max(0, balance - lumpApplied));
+      }
+
       snapshots.push({
         month,
         date: addMonths(new Date(), month),
-        payment,
+        payment: payment + lumpApplied,
         interest,
-        principal,
+        principal: round2(principal + lumpApplied),
         balance: Math.max(0, balance),
+        lumpSum: lumpApplied > 0 ? lumpApplied : undefined,
       });
     }
 
@@ -249,9 +278,10 @@
       sliderMax: 2000,
       sliderStep: 25,
 
-      // Lump sum
-      includeLumpSum: false,
-      lumpSumAmount: 0,
+      // Lump sums
+      showLumpSums: false,
+      lumpSums: [],  // [{id, amount, date, monthOffset}]
+      _lumpIdCounter: 0,
 
       // Results (computed from slider)
       result: null,
@@ -268,8 +298,14 @@
         return '£' + this.sliderValue.toLocaleString('en-GB');
       },
 
-      get effectiveLumpSum() {
-        return this.includeLumpSum ? (parseFloat(this.lumpSumAmount) || 0) : 0;
+      get effectiveLumpSums() {
+        if (!this.showLumpSums) return [];
+        return this.lumpSums
+          .filter(ls => parseFloat(ls.amount) > 0)
+          .map(ls => ({
+            amount: parseFloat(ls.amount),
+            monthOffset: ls.monthOffset || 0
+          }));
       },
 
       get tableRows() {
@@ -342,12 +378,12 @@
       recalculate() {
         if (!this.balance || !this.annualRate) return;
 
-        // Current pace (no lump sum)
+        // Current pace (no lump sums)
         this.currentPaceResult = projectPayoff(
           this.balance,
           this.annualRate,
           this.currentPacePayment,
-          0,
+          [],
         );
 
         // Selected plan
@@ -355,7 +391,7 @@
           this.balance,
           this.annualRate,
           this.sliderValue,
-          this.effectiveLumpSum,
+          this.effectiveLumpSums,
         );
 
         // Debounced chart update
@@ -373,6 +409,33 @@
       // Preset buttons
       setPreset(value) {
         this.sliderValue = value;
+        this.recalculate();
+      },
+
+      // Lump sum management
+      addLumpSum() {
+        this._lumpIdCounter++;
+        this.lumpSums.push({
+          id: this._lumpIdCounter,
+          amount: '',
+          date: new Date().toISOString().split('T')[0],
+          monthOffset: 0
+        });
+      },
+
+      removeLumpSum(id) {
+        this.lumpSums = this.lumpSums.filter(ls => ls.id !== id);
+        this.recalculate();
+      },
+
+      updateLumpSumOffset(ls) {
+        // Calculate month offset from date
+        const lsDate = new Date(ls.date);
+        const now = new Date();
+        ls.monthOffset = Math.max(0, Math.round(
+          (lsDate.getFullYear() - now.getFullYear()) * 12 +
+          (lsDate.getMonth() - now.getMonth())
+        ));
         this.recalculate();
       },
 

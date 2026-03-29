@@ -474,42 +474,42 @@
                 </template>
               </div>
 
-              <!-- Lump sum toggle -->
+              <!-- Lump Sums Section -->
               <div class="mt-5 pt-4 border-t" style="border-color: var(--border)">
-                <label class="flex items-center gap-3 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    class="styled"
-                    x-model="includeLumpSum"
-                    @change="recalculate()"
-                    aria-controls="lump-sum-field"
-                  />
-                  <span class="text-sm font-medium" style="color: var(--text-primary)">
-                    Include a one-off lump sum payment
-                  </span>
-                </label>
+                <div class="flex items-center justify-between">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" x-model="showLumpSums" @change="if(!showLumpSums) { lumpSums = []; recalculate(); }"
+                      class="w-4 h-4 rounded" style="accent-color: #6366f1" />
+                    <span class="text-sm font-medium" style="color: var(--text-primary)">Include one-off lump sum payments</span>
+                  </label>
+                </div>
 
-                <div
-                  id="lump-sum-field"
-                  class="lump-reveal"
-                  :class="{ 'open': includeLumpSum }"
-                >
-                  <div class="relative">
-                    <span
-                      class="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-base font-medium pointer-events-none"
-                      style="color: var(--text-muted)"
-                    >£</span>
-                    <input
-                      type="number"
-                      class="pay-input pl-7"
-                      placeholder="0.00"
-                      min="0"
-                      step="50"
-                      x-model.number="lumpSumAmount"
-                      @input="recalculate()"
-                      aria-label="Lump sum amount"
-                    />
-                  </div>
+                <div x-show="showLumpSums" x-transition class="space-y-3 mt-3">
+                  <!-- Existing lump sums -->
+                  <template x-for="ls in lumpSums" :key="ls.id">
+                    <div class="flex items-end gap-2 flex-wrap p-3 rounded-lg" style="background: var(--bg-base); border: 1px solid var(--border);">
+                      <div class="flex-1" style="min-width: 120px">
+                        <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Amount</label>
+                        <div class="relative">
+                          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-mono" style="color: var(--text-muted)">£</span>
+                          <input type="number" min="1" step="1" class="pay-input pl-7 text-sm w-full" placeholder="0"
+                            x-model="ls.amount" @input="recalculate()" />
+                        </div>
+                      </div>
+                      <div class="flex-1" style="min-width: 140px">
+                        <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Date</label>
+                        <input type="date" class="pay-input text-sm w-full" x-model="ls.date" @change="updateLumpSumOffset(ls)" />
+                      </div>
+                      <button @click="removeLumpSum(ls.id)" class="text-xs px-2 py-2 rounded-lg transition-colors shrink-0"
+                        style="color: var(--text-muted)" title="Remove">&#10005;</button>
+                    </div>
+                  </template>
+
+                  <!-- Add another button -->
+                  <button @click="addLumpSum()" class="text-xs font-medium px-3 py-2 rounded-lg transition-colors w-full text-center"
+                    style="color: #6366f1; background: rgba(99,102,241,0.08); border: 1px dashed rgba(99,102,241,0.3);">
+                    + Add lump sum payment
+                  </button>
                 </div>
               </div>
 
@@ -628,7 +628,10 @@
                       <tr>
                         <td class="mono-cell" x-text="row.month"></td>
                         <td x-text="rowDate(row)"></td>
-                        <td class="mono-cell" x-text="formatCurrency(row.payment)"></td>
+                        <td class="mono-cell">
+                          <span x-text="formatCurrency(row.payment)"></span>
+                          <span x-show="row.lumpSum" class="text-xs ml-1" style="color: #6366f1">(inc. lump sum)</span>
+                        </td>
                         <td class="mono-cell text-amber-600 dark:text-amber-400" x-text="formatCurrency(row.interest)"></td>
                         <td class="mono-cell text-indigo-600 dark:text-indigo-400" x-text="formatCurrency(row.principal)"></td>
                         <td class="mono-cell font-semibold" x-text="formatCurrency(row.balance)"></td>
