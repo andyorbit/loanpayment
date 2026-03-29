@@ -48,15 +48,19 @@ CREATE TABLE IF NOT EXISTS admin_config (
 CREATE TABLE IF NOT EXISTS monzo_config (
     id INTEGER PRIMARY KEY DEFAULT 1,
     google_sheet_id TEXT,
-    sheet_name TEXT DEFAULT 'Sheet1',
+    sheet_name TEXT DEFAULT 'Personal Account Transactions',
     last_sync_at TEXT,
     sync_interval_minutes INTEGER DEFAULT 30
 );
 
-CREATE TABLE IF NOT EXISTS monzo_senders (
+CREATE TABLE IF NOT EXISTS monzo_criteria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name_pattern TEXT NOT NULL,
-    description TEXT
+    group_name TEXT NOT NULL,
+    field TEXT NOT NULL,
+    match_type TEXT NOT NULL,
+    match_value TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (

@@ -43,6 +43,7 @@ document.addEventListener('alpine:init', () => {
       await Promise.all([
         this.fetchPayments(),
         this.fetchSettings(),
+        this.fetchMonzoConfig(),
       ]);
       this.loading = false;
     },
@@ -301,30 +302,177 @@ document.addEventListener('alpine:init', () => {
 
     /* ── Monzo / Sheets ────────────────────────────────────── */
     monzoSheetId: '',
-    monzoPatterns: [],
-    newPattern: '',
+    monzoSheetName: 'Personal Account Transactions',
+    monzoCriteriaGroups: {},
     monzoLastSync: null,
     monzoSyncing: false,
+    monzoLoading: false,
+    monzoAvailableFields: ['Name', 'Description', 'Notes and #tags', 'Type', 'Category'],
+    monzoAvailableMatchTypes: ['contains', 'exact', 'starts_with', 'ends_with'],
+    monzoSyncResult: null,
+    newGroupName: '',
 
-    addPattern() {
-      const p = this.newPattern.trim();
-      if (p && !this.monzoPatterns.includes(p)) {
-        this.monzoPatterns.push(p);
-        this.newPattern = '';
+    matchTypeLabel(mt) {
+      switch (mt) {
+        case 'contains': return 'contains';
+        case 'exact': return 'exact';
+        case 'starts_with': return 'starts with';
+        case 'ends_with': return 'ends with';
+        default: return mt;
       }
     },
 
-    removePattern(idx) {
-      this.monzoPatterns.splice(idx, 1);
+    async fetchMonzoConfig() {
+      this.monzoLoading = true;
+      try {
+        const res = await fetch('/payment/api/admin/monzo');
+        if (this.handleAuthError(res)) return;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        this.monzoSheetId = data.config?.google_sheet_id || '';
+        this.monzoSheetName = data.config?.sheet_name || 'Personal Account Transactions';
+        this.monzoLastSync = data.config?.last_sync_at || null;
+        this.monzoCriteriaGroups = data.criteriaGroups || {};
+        if (data.availableFields) this.monzoAvailableFields = data.availableFields;
+        if (data.availableMatchTypes) this.monzoAvailableMatchTypes = data.availableMatchTypes;
+      } catch (e) {
+        this.flash('Failed to load Monzo config: ' + e.message, true);
+      } finally {
+        this.monzoLoading = false;
+      }
+    },
+
+    async saveMonzoConfig() {
+      try {
+        const res = await fetch('/payment/api/admin/monzo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ google_sheet_id: this.monzoSheetId, sheet_name: this.monzoSheetName })
+        });
+        if (this.handleAuthError(res)) return;
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
+        this.flash('Monzo config saved.');
+      } catch (e) {
+        this.flash('Save failed: ' + e.message, true);
+      }
+    },
+
+    async addCriterionGroup() {
+      const name = this.newGroupName.trim();
+      if (!name) return;
+      if (this.monzoCriteriaGroups[name]) {
+        this.flash('Group already exists.', true);
+        return;
+      }
+      // Add a default criterion to the new group
+      try {
+        const res = await fetch('/payment/api/admin/monzo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ add_criterion: { group_name: name, field: 'Name', match_type: 'contains', match_value: '' } })
+        });
+        if (this.handleAuthError(res)) return;
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
+        this.newGroupName = '';
+        await this.fetchMonzoConfig();
+      } catch (e) {
+        this.flash('Failed to add group: ' + e.message, true);
+      }
+    },
+
+    async addCriterion(groupName) {
+      try {
+        const res = await fetch('/payment/api/admin/monzo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ add_criterion: { group_name: groupName, field: 'Name', match_type: 'contains', match_value: '' } })
+        });
+        if (this.handleAuthError(res)) return;
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
+        await this.fetchMonzoConfig();
+      } catch (e) {
+        this.flash('Failed to add criterion: ' + e.message, true);
+      }
+    },
+
+    async updateCriterion(criterion) {
+      try {
+        const res = await fetch('/payment/api/admin/monzo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ update_criterion: { id: criterion.id, field: criterion.field, match_type: criterion.match_type, match_value: criterion.match_value, is_active: criterion.is_active } })
+        });
+        if (this.handleAuthError(res)) return;
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
+      } catch (e) {
+        this.flash('Update failed: ' + e.message, true);
+      }
+    },
+
+    async removeCriterion(id) {
+      if (!confirm('Remove this criterion?')) return;
+      try {
+        const res = await fetch('/payment/api/admin/monzo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ remove_criterion: { id } })
+        });
+        if (this.handleAuthError(res)) return;
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
+        await this.fetchMonzoConfig();
+      } catch (e) {
+        this.flash('Remove failed: ' + e.message, true);
+      }
+    },
+
+    async deleteGroup(groupName) {
+      if (!confirm(`Delete group "${groupName}" and all its criteria?`)) return;
+      const criteria = this.monzoCriteriaGroups[groupName] || [];
+      try {
+        for (const c of criteria) {
+          await fetch('/payment/api/admin/monzo', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ remove_criterion: { id: c.id } })
+          });
+        }
+        await this.fetchMonzoConfig();
+        this.flash(`Group "${groupName}" deleted.`);
+      } catch (e) {
+        this.flash('Delete failed: ' + e.message, true);
+      }
+    },
+
+    async renameGroup(oldName) {
+      const newName = prompt('New group name:', oldName);
+      if (!newName || newName.trim() === oldName) return;
+      try {
+        const res = await fetch('/payment/api/admin/monzo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rename_group: { old_name: oldName, new_name: newName.trim() } })
+        });
+        if (this.handleAuthError(res)) return;
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
+        await this.fetchMonzoConfig();
+        this.flash(`Group renamed to "${newName.trim()}".`);
+      } catch (e) {
+        this.flash('Rename failed: ' + e.message, true);
+      }
     },
 
     async syncMonzo() {
       this.monzoSyncing = true;
+      this.monzoSyncResult = null;
       try {
-        // Phase 4 placeholder
-        await new Promise(r => setTimeout(r, 1200));
+        const res = await fetch('/payment/api/admin/monzo', { method: 'POST' });
+        if (this.handleAuthError(res)) return;
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        this.monzoSyncResult = data;
         this.monzoLastSync = new Date().toISOString();
-        this.flash('Sync complete (placeholder).');
+        this.flash(data.message || 'Sync complete.');
+        await this.fetchPayments();
       } catch (e) {
         this.flash('Sync failed: ' + e.message, true);
       } finally {

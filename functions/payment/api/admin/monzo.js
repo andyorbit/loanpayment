@@ -1,24 +1,39 @@
 import { query, queryFirst, execute } from '../../../../lib/db.js';
 import { getAccessToken, fetchSheetRows, matchTransactions } from '../../../../lib/monzo.js';
 
-// GET: Get Monzo config, senders, and recent transactions
+// Column headers available for criteria matching
+const AVAILABLE_FIELDS = ['Name', 'Description', 'Notes and #tags', 'Type', 'Category'];
+const AVAILABLE_MATCH_TYPES = ['contains', 'exact', 'starts_with', 'ends_with'];
+
+// GET: Get Monzo config, criteria groups, and recent transactions
 export async function onRequestGet(context) {
   const { env } = context;
 
   try {
     const config = await queryFirst(env.DB, 'SELECT * FROM monzo_config WHERE id = 1');
-    const senders = await query(env.DB, 'SELECT * FROM monzo_senders ORDER BY id ASC');
+    const criteriaRows = await query(env.DB, 'SELECT * FROM monzo_criteria ORDER BY group_name ASC, id ASC');
     const pendingPayments = await query(env.DB, "SELECT * FROM payments WHERE status = 'pending' ORDER BY payment_date DESC");
 
+    // Group criteria by group_name
+    const criteriaGroups = {};
+    for (const row of criteriaRows) {
+      if (!criteriaGroups[row.group_name]) criteriaGroups[row.group_name] = [];
+      criteriaGroups[row.group_name].push(row);
+    }
+
     let recentTransactions = [];
+    let sheetHeaders = [];
 
     // If configured and we have the Google SA key, fetch recent sheet data
     if (config?.google_sheet_id && env.GOOGLE_SA_KEY) {
       try {
         const accessToken = await getAccessToken(env.GOOGLE_SA_KEY);
-        const rows = await fetchSheetRows(accessToken, config.google_sheet_id, config.sheet_name || 'Sheet1');
-        // Return last 20 rows for display
-        recentTransactions = rows.slice(-20).reverse();
+        const rows = await fetchSheetRows(accessToken, config.google_sheet_id, config.sheet_name || 'Personal Account Transactions');
+        if (rows.length > 0) {
+          sheetHeaders = rows[0];
+          // Return last 20 data rows for display
+          recentTransactions = rows.slice(-20).reverse();
+        }
       } catch (err) {
         // Don't fail the whole request if sheet fetch fails
         recentTransactions = [];
@@ -26,45 +41,96 @@ export async function onRequestGet(context) {
     }
 
     return Response.json({
-      config: config || { google_sheet_id: null, sheet_name: 'Sheet1', last_sync_at: null, sync_interval_minutes: 30 },
-      senders,
+      config: config || { google_sheet_id: null, sheet_name: 'Personal Account Transactions', last_sync_at: null, sync_interval_minutes: 30 },
+      criteriaGroups,
       pendingPayments,
-      recentTransactions
+      recentTransactions,
+      sheetHeaders,
+      availableFields: AVAILABLE_FIELDS,
+      availableMatchTypes: AVAILABLE_MATCH_TYPES
     });
   } catch (err) {
     return Response.json({ error: 'Failed to load Monzo config: ' + err.message }, { status: 500 });
   }
 }
 
-// PUT: Update Monzo config
+// PUT: Update Monzo config and criteria
 export async function onRequestPut(context) {
   const { request, env } = context;
 
   try {
     const body = await request.json();
-    const { google_sheet_id, sheet_name, sync_interval_minutes } = body;
 
-    // Upsert monzo_config
-    const existing = await queryFirst(env.DB, 'SELECT * FROM monzo_config WHERE id = 1');
-    if (existing) {
+    // Handle config updates (sheet_id, sheet_name, sync_interval)
+    if (body.google_sheet_id !== undefined || body.sheet_name !== undefined || body.sync_interval_minutes !== undefined) {
+      const existing = await queryFirst(env.DB, 'SELECT * FROM monzo_config WHERE id = 1');
+      if (existing) {
+        await execute(env.DB,
+          'UPDATE monzo_config SET google_sheet_id = ?, sheet_name = ?, sync_interval_minutes = ? WHERE id = 1',
+          [
+            body.google_sheet_id !== undefined ? body.google_sheet_id : existing.google_sheet_id,
+            body.sheet_name !== undefined ? body.sheet_name : existing.sheet_name,
+            body.sync_interval_minutes !== undefined ? body.sync_interval_minutes : existing.sync_interval_minutes
+          ]
+        );
+      } else {
+        await execute(env.DB,
+          'INSERT INTO monzo_config (id, google_sheet_id, sheet_name, sync_interval_minutes) VALUES (1, ?, ?, ?)',
+          [body.google_sheet_id, body.sheet_name || 'Personal Account Transactions', body.sync_interval_minutes || 30]
+        );
+      }
+    }
+
+    // Add a new criterion
+    if (body.add_criterion) {
+      const { group_name, field, match_type, match_value } = body.add_criterion;
+      if (!group_name || !field || !match_type || !match_value) {
+        return Response.json({ error: 'add_criterion requires group_name, field, match_type, match_value' }, { status: 400 });
+      }
+      if (!AVAILABLE_FIELDS.includes(field)) {
+        return Response.json({ error: `Invalid field: ${field}. Must be one of: ${AVAILABLE_FIELDS.join(', ')}` }, { status: 400 });
+      }
+      if (!AVAILABLE_MATCH_TYPES.includes(match_type)) {
+        return Response.json({ error: `Invalid match_type: ${match_type}. Must be one of: ${AVAILABLE_MATCH_TYPES.join(', ')}` }, { status: 400 });
+      }
       await execute(env.DB,
-        'UPDATE monzo_config SET google_sheet_id = ?, sheet_name = ?, sync_interval_minutes = ? WHERE id = 1',
-        [google_sheet_id || existing.google_sheet_id, sheet_name || existing.sheet_name, sync_interval_minutes || existing.sync_interval_minutes]
-      );
-    } else {
-      await execute(env.DB,
-        'INSERT INTO monzo_config (id, google_sheet_id, sheet_name, sync_interval_minutes) VALUES (1, ?, ?, ?)',
-        [google_sheet_id, sheet_name || 'Sheet1', sync_interval_minutes || 30]
+        'INSERT INTO monzo_criteria (group_name, field, match_type, match_value) VALUES (?, ?, ?, ?)',
+        [group_name, field, match_type, match_value]
       );
     }
 
-    // Handle sender patterns
-    if (body.add_sender) {
-      await execute(env.DB, 'INSERT INTO monzo_senders (name_pattern, description) VALUES (?, ?)',
-        [body.add_sender.pattern, body.add_sender.description || null]);
+    // Update an existing criterion
+    if (body.update_criterion) {
+      const { id, field, match_type, match_value, is_active } = body.update_criterion;
+      if (!id) return Response.json({ error: 'update_criterion requires id' }, { status: 400 });
+
+      const existing = await queryFirst(env.DB, 'SELECT * FROM monzo_criteria WHERE id = ?', [id]);
+      if (!existing) return Response.json({ error: 'Criterion not found' }, { status: 404 });
+
+      await execute(env.DB,
+        'UPDATE monzo_criteria SET field = ?, match_type = ?, match_value = ?, is_active = ? WHERE id = ?',
+        [
+          field !== undefined ? field : existing.field,
+          match_type !== undefined ? match_type : existing.match_type,
+          match_value !== undefined ? match_value : existing.match_value,
+          is_active !== undefined ? is_active : existing.is_active,
+          id
+        ]
+      );
     }
-    if (body.remove_sender_id) {
-      await execute(env.DB, 'DELETE FROM monzo_senders WHERE id = ?', [body.remove_sender_id]);
+
+    // Remove a criterion
+    if (body.remove_criterion) {
+      const { id } = body.remove_criterion;
+      if (!id) return Response.json({ error: 'remove_criterion requires id' }, { status: 400 });
+      await execute(env.DB, 'DELETE FROM monzo_criteria WHERE id = ?', [id]);
+    }
+
+    // Rename a group
+    if (body.rename_group) {
+      const { old_name, new_name } = body.rename_group;
+      if (!old_name || !new_name) return Response.json({ error: 'rename_group requires old_name and new_name' }, { status: 400 });
+      await execute(env.DB, 'UPDATE monzo_criteria SET group_name = ? WHERE group_name = ?', [new_name, old_name]);
     }
 
     await execute(env.DB, 'INSERT INTO audit_log (action, details) VALUES (?, ?)',
@@ -90,25 +156,38 @@ export async function onRequestPost(context) {
       return Response.json({ error: 'Google Service Account key not configured' }, { status: 500 });
     }
 
-    // Get pending payments and sender patterns
+    // Get pending payments and criteria
     const pendingPayments = await query(env.DB, "SELECT * FROM payments WHERE status = 'pending' ORDER BY payment_date ASC");
-    const senders = await query(env.DB, 'SELECT name_pattern FROM monzo_senders');
-    const senderPatterns = senders.map(s => s.name_pattern);
+    const criteriaRows = await query(env.DB, 'SELECT * FROM monzo_criteria WHERE is_active = 1');
 
     if (pendingPayments.length === 0) {
       return Response.json({ message: 'No pending payments to match', matched: 0 });
     }
 
-    if (senderPatterns.length === 0) {
-      return Response.json({ error: 'No sender patterns configured. Add trusted senders first.' }, { status: 400 });
+    if (criteriaRows.length === 0) {
+      return Response.json({ error: 'No matching criteria configured. Add criteria groups first.' }, { status: 400 });
+    }
+
+    // Group criteria by group_name
+    const criteriaGroups = {};
+    for (const row of criteriaRows) {
+      if (!criteriaGroups[row.group_name]) criteriaGroups[row.group_name] = [];
+      criteriaGroups[row.group_name].push({ field: row.field, match_type: row.match_type, match_value: row.match_value });
     }
 
     // Fetch sheet
     const accessToken = await getAccessToken(env.GOOGLE_SA_KEY);
-    const rows = await fetchSheetRows(accessToken, config.google_sheet_id, config.sheet_name || 'Sheet1');
+    const sheetName = config.sheet_name || 'Personal Account Transactions';
+    const rows = await fetchSheetRows(accessToken, config.google_sheet_id, sheetName);
+
+    if (rows.length === 0) {
+      return Response.json({ error: 'Sheet returned no data' }, { status: 400 });
+    }
+
+    const headers = rows[0];
 
     // Match
-    const matches = await matchTransactions(rows, pendingPayments, senderPatterns);
+    const matches = await matchTransactions(rows, headers, pendingPayments, criteriaGroups);
 
     // Auto-validate matched payments
     for (const match of matches) {
