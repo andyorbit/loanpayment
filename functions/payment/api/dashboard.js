@@ -22,33 +22,31 @@ async function tryAutoSync(env) {
       return;
     }
 
-    const criteria = await query(env.DB, 'SELECT * FROM monzo_criteria WHERE is_active = 1');
-    if (criteria.length === 0) return;
+    const nameRows = await query(env.DB, 'SELECT * FROM monzo_names WHERE is_active = 1');
+    if (nameRows.length === 0) return;
 
-    // Group criteria by group_name
-    const criteriaGroups = {};
-    for (const c of criteria) {
-      if (!criteriaGroups[c.group_name]) criteriaGroups[c.group_name] = [];
-      criteriaGroups[c.group_name].push({ field: c.field, match_type: c.match_type, match_value: c.match_value });
-    }
+    const namePatterns = nameRows.map(r => r.name_pattern);
+
+    // Get already-matched Transaction IDs
+    const matchedRows = await query(env.DB, 'SELECT monzo_match_ref FROM payments WHERE monzo_match_ref IS NOT NULL');
+    const alreadyMatchedTxIds = matchedRows.map(r => r.monzo_match_ref);
 
     // Fetch sheet
     const accessToken = await getAccessToken(env.GOOGLE_SA_KEY);
     const rows = await fetchSheetRows(accessToken, config.google_sheet_id, config.sheet_name || 'Personal Account Transactions');
     if (rows.length < 2) return;
 
-    const headers = rows[0];
-    const matches = await matchTransactions(rows, headers, pendingPayments, criteriaGroups);
+    const matches = matchTransactions(rows, pendingPayments, namePatterns, alreadyMatchedTxIds);
 
     // Auto-validate matched payments
     for (const match of matches) {
       await execute(env.DB,
         "UPDATE payments SET status = 'validated', validated_at = datetime('now'), validation_source = 'monzo', monzo_match_ref = ? WHERE id = ?",
-        [`Row ${match.matchedRow}`, match.paymentId]
+        [match.matchedTxId, match.paymentId]
       );
       await execute(env.DB,
         'INSERT INTO audit_log (action, details) VALUES (?, ?)',
-        ['monzo_auto_validated', JSON.stringify({ paymentId: match.paymentId, matchedRow: match.matchedRow, trigger: 'dashboard_load' })]
+        ['monzo_auto_validated', JSON.stringify({ paymentId: match.paymentId, matchedTxId: match.matchedTxId, trigger: 'dashboard_load' })]
       );
     }
 

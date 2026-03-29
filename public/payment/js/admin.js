@@ -303,15 +303,13 @@ document.addEventListener('alpine:init', () => {
     /* ── Monzo / Sheets ────────────────────────────────────── */
     monzoSheetId: '',
     monzoSheetName: 'Personal Account Transactions',
-    monzoCriteriaGroups: {},
+    monzoNames: [],
     monzoLastSync: null,
     monzoSyncing: false,
     monzoLoading: false,
-    monzoAvailableFields: ['Name', 'Description', 'Notes and #tags', 'Type', 'Category'],
     monzoSyncResult: null,
-    quickRuleName: '',
-    quickRuleValue: '',
-    quickRuleField: 'Name',
+    newNameLabel: '',
+    newNamePattern: '',
 
     async fetchMonzoConfig() {
       this.monzoLoading = true;
@@ -323,8 +321,7 @@ document.addEventListener('alpine:init', () => {
         this.monzoSheetId = data.config?.google_sheet_id || '';
         this.monzoSheetName = data.config?.sheet_name || 'Personal Account Transactions';
         this.monzoLastSync = data.config?.last_sync_at || null;
-        this.monzoCriteriaGroups = data.criteriaGroups || {};
-        if (data.availableFields) this.monzoAvailableFields = data.availableFields;
+        this.monzoNames = data.names || [];
       } catch (e) {
         this.flash('Failed to load Monzo config: ' + e.message, true);
       } finally {
@@ -347,115 +344,43 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async quickAddRule() {
-      const name = this.quickRuleName.trim();
-      const value = this.quickRuleValue.trim();
-      if (!name || !value) return;
+    async addName() {
+      const label = this.newNameLabel.trim();
+      const pattern = this.newNamePattern.trim();
+      if (!label || !pattern) return;
 
       try {
         const res = await fetch('/payment/api/admin/monzo', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            add_criterion: {
-              group_name: name,
-              field: this.quickRuleField,
-              match_type: 'contains',
-              match_value: value
-            }
-          })
+          body: JSON.stringify({ add_name: { label, name_pattern: pattern } })
         });
         if (this.handleAuthError(res)) return;
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
 
-        this.quickRuleName = '';
-        this.quickRuleValue = '';
-        this.quickRuleField = 'Name';
+        this.newNameLabel = '';
+        this.newNamePattern = '';
         await this.fetchMonzoConfig();
-        this.flash('Rule added!');
+        this.flash('Name added!');
       } catch (e) {
-        this.flash('Failed to add rule: ' + e.message, true);
+        this.flash('Failed to add name: ' + e.message, true);
       }
     },
 
-    async addCriterion(groupName) {
+    async removeName(id) {
+      if (!confirm('Remove this name?')) return;
       try {
         const res = await fetch('/payment/api/admin/monzo', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ add_criterion: { group_name: groupName, field: 'Name', match_type: 'contains', match_value: '' } })
+          body: JSON.stringify({ remove_name: { id } })
         });
         if (this.handleAuthError(res)) return;
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
         await this.fetchMonzoConfig();
-      } catch (e) {
-        this.flash('Failed to add condition: ' + e.message, true);
-      }
-    },
-
-    async updateCriterion(criterion) {
-      try {
-        const res = await fetch('/payment/api/admin/monzo', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ update_criterion: { id: criterion.id, field: criterion.field, match_type: criterion.match_type, match_value: criterion.match_value, is_active: criterion.is_active } })
-        });
-        if (this.handleAuthError(res)) return;
-        if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
-      } catch (e) {
-        this.flash('Update failed: ' + e.message, true);
-      }
-    },
-
-    async removeCriterion(id) {
-      if (!confirm('Remove this criterion?')) return;
-      try {
-        const res = await fetch('/payment/api/admin/monzo', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ remove_criterion: { id } })
-        });
-        if (this.handleAuthError(res)) return;
-        if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
-        await this.fetchMonzoConfig();
+        this.flash('Name removed.');
       } catch (e) {
         this.flash('Remove failed: ' + e.message, true);
-      }
-    },
-
-    async deleteGroup(groupName) {
-      if (!confirm(`Delete group "${groupName}" and all its criteria?`)) return;
-      const criteria = this.monzoCriteriaGroups[groupName] || [];
-      try {
-        for (const c of criteria) {
-          await fetch('/payment/api/admin/monzo', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ remove_criterion: { id: c.id } })
-          });
-        }
-        await this.fetchMonzoConfig();
-        this.flash(`Group "${groupName}" deleted.`);
-      } catch (e) {
-        this.flash('Delete failed: ' + e.message, true);
-      }
-    },
-
-    async renameGroup(oldName) {
-      const newName = prompt('New group name:', oldName);
-      if (!newName || newName.trim() === oldName) return;
-      try {
-        const res = await fetch('/payment/api/admin/monzo', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rename_group: { old_name: oldName, new_name: newName.trim() } })
-        });
-        if (this.handleAuthError(res)) return;
-        if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
-        await this.fetchMonzoConfig();
-        this.flash(`Group renamed to "${newName.trim()}".`);
-      } catch (e) {
-        this.flash('Rename failed: ' + e.message, true);
       }
     },
 

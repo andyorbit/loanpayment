@@ -881,7 +881,7 @@
                   <div class="w-2.5 h-2.5 rounded-full shrink-0" :class="monzoLastSync ? 'bg-green-500' : 'bg-amber-400'"></div>
                   <div>
                     <div class="text-sm font-medium" style="color: var(--text-primary)" x-text="monzoLastSync ? 'Last synced' : 'Never synced'"></div>
-                    <div class="text-xs mt-0.5" style="color: var(--text-muted)" x-text="monzoLastSync ? formatAuditTime(monzoLastSync) : 'Configure criteria and click Sync Now'"></div>
+                    <div class="text-xs mt-0.5" style="color: var(--text-muted)" x-text="monzoLastSync ? formatAuditTime(monzoLastSync) : 'Add names and click Sync Now'"></div>
                   </div>
                 </div>
 
@@ -909,89 +909,54 @@
               </div>
             </div>
 
-            <!-- Quick Add Rule -->
+            <!-- Who to look for -->
             <div class="card p-5 space-y-4">
               <div>
-                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Add a Matching Rule</h2>
-                <p class="text-xs mt-0.5" style="color: var(--text-muted)">Tell us what to look for in your Monzo transactions to auto-validate payments</p>
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Who to Look For</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">
+                  Add the names of people who send you loan repayments via Monzo.
+                  We'll automatically match their payments by name, amount, and date (&#177;2 days).
+                </p>
               </div>
 
-              <div class="space-y-3">
-                <div>
-                  <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Rule name</label>
-                  <input type="text" class="admin-input" placeholder="e.g. Mum's payments" x-model="quickRuleName" @keydown.enter="quickAddRule()" />
+              <!-- Add new name -->
+              <div class="flex gap-2 items-end">
+                <div class="flex-1">
+                  <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Label</label>
+                  <input type="text" class="admin-input" placeholder="e.g. Mum" x-model="newNameLabel" @keydown.enter="addName()" />
                 </div>
-                <div class="flex gap-2 items-end">
-                  <div class="flex-1">
-                    <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Look for</label>
-                    <input type="text" class="admin-input" placeholder="e.g. LIM, MUM, DAD" x-model="quickRuleValue" @keydown.enter="quickAddRule()" />
-                  </div>
-                  <div class="w-40 shrink-0">
-                    <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">in column</label>
-                    <select class="admin-input" x-model="quickRuleField">
-                      <option value="Name">Name</option>
-                      <option value="Description">Description</option>
-                      <option value="Notes and #tags">Notes & Tags</option>
-                      <option value="Type">Type</option>
-                      <option value="Category">Category</option>
-                    </select>
-                  </div>
+                <div class="flex-1">
+                  <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Search name for</label>
+                  <input type="text" class="admin-input" placeholder="e.g. LIM" x-model="newNamePattern" @keydown.enter="addName()" />
                 </div>
+                <button @click="addName()" class="btn-primary shrink-0" style="width: auto; padding: 0.625rem 1rem;" :disabled="!newNameLabel.trim() || !newNamePattern.trim()">
+                  Add
+                </button>
               </div>
 
-              <button @click="quickAddRule()" class="btn-primary" style="width: auto; padding: 0.625rem 1.25rem;" :disabled="!quickRuleName.trim() || !quickRuleValue.trim()">
-                + Add Rule
-              </button>
-            </div>
-
-            <!-- Active Rules -->
-            <div class="card p-5 space-y-4" x-show="Object.keys(monzoCriteriaGroups).length > 0">
-              <div>
-                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Active Rules</h2>
-                <p class="text-xs mt-0.5" style="color: var(--text-muted)">Transactions matching ANY rule will auto-validate. Conditions within a rule must ALL match.</p>
+              <!-- Existing names -->
+              <div class="space-y-2" x-show="monzoNames.length > 0">
+                <template x-for="name in monzoNames" :key="name.id">
+                  <div class="flex items-center justify-between py-2 px-3 rounded-lg" style="background: var(--bg-base); border: 1px solid var(--border);">
+                    <div class="flex items-center gap-3">
+                      <span class="text-sm font-semibold" style="color: var(--text-primary)" x-text="name.label"></span>
+                      <span class="text-xs font-mono px-2 py-0.5 rounded" style="background: rgba(99,102,241,0.08); color: #6366f1" x-text="'looks for: ' + name.name_pattern"></span>
+                    </div>
+                    <button @click="removeName(name.id)" class="text-xs px-2 py-1 rounded-lg transition-colors" style="color: var(--text-muted)" title="Remove">&#215;</button>
+                  </div>
+                </template>
               </div>
 
-              <template x-for="(criteria, groupName) in monzoCriteriaGroups" :key="groupName">
-                <div class="rounded-xl p-4 space-y-3" style="background: var(--bg-base); border: 1px solid var(--border); border-left: 3px solid #6366f1;">
-                  <!-- Group header -->
-                  <div class="flex items-center justify-between">
-                    <h3 class="text-sm font-semibold" style="color: var(--text-primary)" x-text="groupName"></h3>
-                    <button @click="deleteGroup(groupName)" class="text-xs px-2 py-1 rounded-lg transition-colors" style="color: var(--text-muted)"
-                      onmouseover="this.style.color='#be123c'; this.style.background='rgba(190,18,60,0.08)'"
-                      onmouseout="this.style.color='var(--text-muted)'; this.style.background='transparent'">
-                      Delete
-                    </button>
-                  </div>
+              <!-- Empty state -->
+              <p x-show="monzoNames.length === 0" class="text-sm text-center py-3" style="color: var(--text-muted)">
+                No names configured yet. Add someone above to start matching.
+              </p>
 
-                  <!-- Conditions -->
-                  <div class="space-y-2">
-                    <template x-for="criterion in criteria" :key="criterion.id">
-                      <div class="flex items-center gap-2 text-sm flex-wrap">
-                        <select class="admin-input text-xs py-1.5 w-auto" x-model="criterion.field" @change="updateCriterion(criterion)" style="min-width: 120px">
-                          <option value="Name">Name</option>
-                          <option value="Description">Description</option>
-                          <option value="Notes and #tags">Notes & Tags</option>
-                          <option value="Type">Type</option>
-                          <option value="Category">Category</option>
-                        </select>
-                        <span class="text-xs font-medium shrink-0" style="color: var(--text-muted)">contains</span>
-                        <input type="text" class="admin-input text-xs py-1.5 flex-1" style="min-width: 100px" x-model="criterion.match_value" @change="updateCriterion(criterion)" placeholder="Search text..." />
-                        <button @click="removeCriterion(criterion.id)" class="text-xs px-1.5 py-1 rounded" style="color: var(--text-muted)" title="Remove condition">&times;</button>
-                      </div>
-                    </template>
-                  </div>
-
-                  <!-- Add condition -->
-                  <button @click="addCriterion(groupName)" class="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors" style="color: #6366f1; background: rgba(99,102,241,0.08)">
-                    + Add condition
-                  </button>
-                </div>
-              </template>
-            </div>
-
-            <!-- Empty state -->
-            <div x-show="Object.keys(monzoCriteriaGroups).length === 0" class="card p-5 text-center">
-              <p class="text-sm" style="color: var(--text-muted)">No matching rules yet. Add one above to start auto-validating payments from Monzo.</p>
+              <!-- How it works explainer -->
+              <div class="text-xs leading-relaxed p-3 rounded-lg" style="background: rgba(99,102,241,0.04); border: 1px solid rgba(99,102,241,0.1); color: var(--text-muted)">
+                <strong style="color: var(--text-primary)">How matching works:</strong>
+                When a payment is recorded, we search your Monzo sheet for a "Faster payment" where the Name contains your search text, the amount matches, and the date is within 2 days. Each Monzo transaction can only match once (tracked by Transaction ID).
+              </div>
             </div>
 
           </div>

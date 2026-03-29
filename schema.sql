@@ -53,12 +53,10 @@ CREATE TABLE IF NOT EXISTS monzo_config (
     sync_interval_minutes INTEGER DEFAULT 30
 );
 
-CREATE TABLE IF NOT EXISTS monzo_criteria (
+CREATE TABLE IF NOT EXISTS monzo_names (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    group_name TEXT NOT NULL,
-    field TEXT NOT NULL,
-    match_type TEXT NOT NULL,
-    match_value TEXT NOT NULL,
+    label TEXT NOT NULL,
+    name_pattern TEXT NOT NULL,
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
 );
