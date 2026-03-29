@@ -909,132 +909,89 @@
               </div>
             </div>
 
-            <!-- Criteria Groups -->
+            <!-- Quick Add Rule -->
             <div class="card p-5 space-y-4">
-              <div class="flex items-start justify-between">
+              <div>
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Add a Matching Rule</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">Tell us what to look for in your Monzo transactions to auto-validate payments</p>
+              </div>
+
+              <div class="space-y-3">
                 <div>
-                  <h2 class="text-base font-semibold" style="color: var(--text-primary)">Matching Criteria</h2>
-                  <p class="text-xs mt-0.5" style="color: var(--text-muted)">Define rules to match Monzo transactions. Groups are OR'd; criteria within a group are AND'd.</p>
+                  <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Rule name</label>
+                  <input type="text" class="admin-input" placeholder="e.g. Mum's payments" x-model="quickRuleName" @keydown.enter="quickAddRule()" />
+                </div>
+                <div class="flex gap-2 items-end">
+                  <div class="flex-1">
+                    <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">Look for</label>
+                    <input type="text" class="admin-input" placeholder="e.g. LIM, MUM, DAD" x-model="quickRuleValue" @keydown.enter="quickAddRule()" />
+                  </div>
+                  <div class="w-40 shrink-0">
+                    <label class="text-xs font-medium block mb-1" style="color: var(--text-muted)">in column</label>
+                    <select class="admin-input" x-model="quickRuleField">
+                      <option value="Name">Name</option>
+                      <option value="Description">Description</option>
+                      <option value="Notes and #tags">Notes & Tags</option>
+                      <option value="Type">Type</option>
+                      <option value="Category">Category</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              <!-- Existing groups -->
+              <button @click="quickAddRule()" class="btn-primary" style="width: auto; padding: 0.625rem 1.25rem;" :disabled="!quickRuleName.trim() || !quickRuleValue.trim()">
+                + Add Rule
+              </button>
+            </div>
+
+            <!-- Active Rules -->
+            <div class="card p-5 space-y-4" x-show="Object.keys(monzoCriteriaGroups).length > 0">
+              <div>
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Active Rules</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">Transactions matching ANY rule will auto-validate. Conditions within a rule must ALL match.</p>
+              </div>
+
               <template x-for="(criteria, groupName) in monzoCriteriaGroups" :key="groupName">
-                <div class="rounded-xl p-4 space-y-3" style="background: var(--bg-base); border: 1px solid var(--border);">
+                <div class="rounded-xl p-4 space-y-3" style="background: var(--bg-base); border: 1px solid var(--border); border-left: 3px solid #6366f1;">
                   <!-- Group header -->
                   <div class="flex items-center justify-between">
                     <h3 class="text-sm font-semibold" style="color: var(--text-primary)" x-text="groupName"></h3>
-                    <div class="flex items-center gap-2">
-                      <button
-                        @click="renameGroup(groupName)"
-                        class="btn-sm text-xs"
-                        style="background: rgba(99,91,255,0.08); color: #6366f1; padding: 0.25rem 0.625rem;"
-                      >
-                        Rename
-                      </button>
-                      <button
-                        @click="deleteGroup(groupName)"
-                        class="btn-sm text-xs"
-                        style="background: rgba(190,18,60,0.08); color: #be123c; padding: 0.25rem 0.625rem;"
-                      >
-                        Delete Group
-                      </button>
-                    </div>
+                    <button @click="deleteGroup(groupName)" class="text-xs px-2 py-1 rounded-lg transition-colors" style="color: var(--text-muted)"
+                      onmouseover="this.style.color='#be123c'; this.style.background='rgba(190,18,60,0.08)'"
+                      onmouseout="this.style.color='var(--text-muted)'; this.style.background='transparent'">
+                      Delete
+                    </button>
                   </div>
 
-                  <!-- Criteria rows -->
+                  <!-- Conditions -->
                   <div class="space-y-2">
                     <template x-for="criterion in criteria" :key="criterion.id">
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <!-- Field dropdown -->
-                        <select
-                          x-model="criterion.field"
-                          @change="updateCriterion(criterion)"
-                          class="admin-input text-xs"
-                          style="width: auto; min-width: 140px; padding: 0.375rem 0.5rem;"
-                        >
-                          <template x-for="f in monzoAvailableFields" :key="f">
-                            <option :value="f" x-text="f"></option>
-                          </template>
+                      <div class="flex items-center gap-2 text-sm flex-wrap">
+                        <select class="admin-input text-xs py-1.5 w-auto" x-model="criterion.field" @change="updateCriterion(criterion)" style="min-width: 120px">
+                          <option value="Name">Name</option>
+                          <option value="Description">Description</option>
+                          <option value="Notes and #tags">Notes & Tags</option>
+                          <option value="Type">Type</option>
+                          <option value="Category">Category</option>
                         </select>
-
-                        <!-- Match type dropdown -->
-                        <select
-                          x-model="criterion.match_type"
-                          @change="updateCriterion(criterion)"
-                          class="admin-input text-xs"
-                          style="width: auto; min-width: 110px; padding: 0.375rem 0.5rem;"
-                        >
-                          <template x-for="mt in monzoAvailableMatchTypes" :key="mt">
-                            <option :value="mt" x-text="matchTypeLabel(mt)"></option>
-                          </template>
-                        </select>
-
-                        <!-- Value input -->
-                        <input
-                          type="text"
-                          x-model="criterion.match_value"
-                          @change="updateCriterion(criterion)"
-                          class="admin-input text-xs flex-1"
-                          style="min-width: 120px; padding: 0.375rem 0.5rem;"
-                          placeholder="Match value..."
-                        />
-
-                        <!-- Active toggle -->
-                        <label class="flex items-center gap-1.5 cursor-pointer shrink-0">
-                          <input
-                            type="checkbox"
-                            :checked="criterion.is_active === 1"
-                            @change="criterion.is_active = $event.target.checked ? 1 : 0; updateCriterion(criterion)"
-                            class="w-3.5 h-3.5 rounded"
-                          />
-                          <span class="text-xs" style="color: var(--text-muted)">Active</span>
-                        </label>
-
-                        <!-- Delete button -->
-                        <button
-                          @click="removeCriterion(criterion.id)"
-                          class="btn-icon shrink-0"
-                          style="background: rgba(190,18,60,0.08); color: #be123c; width:26px; height:26px;"
-                          title="Remove criterion"
-                        >
-                          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                        <span class="text-xs font-medium shrink-0" style="color: var(--text-muted)">contains</span>
+                        <input type="text" class="admin-input text-xs py-1.5 flex-1" style="min-width: 100px" x-model="criterion.match_value" @change="updateCriterion(criterion)" placeholder="Search text..." />
+                        <button @click="removeCriterion(criterion.id)" class="text-xs px-1.5 py-1 rounded" style="color: var(--text-muted)" title="Remove condition">&times;</button>
                       </div>
                     </template>
                   </div>
 
-                  <!-- Add criterion button -->
-                  <button
-                    @click="addCriterion(groupName)"
-                    class="btn-sm text-xs"
-                    style="background: rgba(99,91,255,0.08); color: #6366f1; padding: 0.25rem 0.75rem;"
-                  >
-                    + Add criterion
+                  <!-- Add condition -->
+                  <button @click="addCriterion(groupName)" class="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors" style="color: #6366f1; background: rgba(99,102,241,0.08)">
+                    + Add condition
                   </button>
                 </div>
               </template>
+            </div>
 
-              <!-- Add new group -->
-              <div class="flex gap-2 items-center pt-2">
-                <input
-                  type="text"
-                  x-model="newGroupName"
-                  @keydown.enter="addCriterionGroup()"
-                  class="admin-input flex-1"
-                  style="font-size: 0.85rem;"
-                  placeholder="New group name, e.g. Mum's Payments"
-                />
-                <button
-                  @click="addCriterionGroup()"
-                  class="btn-sm shrink-0"
-                  style="background: rgba(99,91,255,0.1); color: #6366f1;"
-                >
-                  + Add New Group
-                </button>
-              </div>
+            <!-- Empty state -->
+            <div x-show="Object.keys(monzoCriteriaGroups).length === 0" class="card p-5 text-center">
+              <p class="text-sm" style="color: var(--text-muted)">No matching rules yet. Add one above to start auto-validating payments from Monzo.</p>
             </div>
 
           </div>

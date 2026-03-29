@@ -308,19 +308,10 @@ document.addEventListener('alpine:init', () => {
     monzoSyncing: false,
     monzoLoading: false,
     monzoAvailableFields: ['Name', 'Description', 'Notes and #tags', 'Type', 'Category'],
-    monzoAvailableMatchTypes: ['contains', 'exact', 'starts_with', 'ends_with'],
     monzoSyncResult: null,
-    newGroupName: '',
-
-    matchTypeLabel(mt) {
-      switch (mt) {
-        case 'contains': return 'contains';
-        case 'exact': return 'exact';
-        case 'starts_with': return 'starts with';
-        case 'ends_with': return 'ends with';
-        default: return mt;
-      }
-    },
+    quickRuleName: '',
+    quickRuleValue: '',
+    quickRuleField: 'Name',
 
     async fetchMonzoConfig() {
       this.monzoLoading = true;
@@ -334,7 +325,6 @@ document.addEventListener('alpine:init', () => {
         this.monzoLastSync = data.config?.last_sync_at || null;
         this.monzoCriteriaGroups = data.criteriaGroups || {};
         if (data.availableFields) this.monzoAvailableFields = data.availableFields;
-        if (data.availableMatchTypes) this.monzoAvailableMatchTypes = data.availableMatchTypes;
       } catch (e) {
         this.flash('Failed to load Monzo config: ' + e.message, true);
       } finally {
@@ -357,26 +347,34 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async addCriterionGroup() {
-      const name = this.newGroupName.trim();
-      if (!name) return;
-      if (this.monzoCriteriaGroups[name]) {
-        this.flash('Group already exists.', true);
-        return;
-      }
-      // Add a default criterion to the new group
+    async quickAddRule() {
+      const name = this.quickRuleName.trim();
+      const value = this.quickRuleValue.trim();
+      if (!name || !value) return;
+
       try {
         const res = await fetch('/payment/api/admin/monzo', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ add_criterion: { group_name: name, field: 'Name', match_type: 'contains', match_value: '' } })
+          body: JSON.stringify({
+            add_criterion: {
+              group_name: name,
+              field: this.quickRuleField,
+              match_type: 'contains',
+              match_value: value
+            }
+          })
         });
         if (this.handleAuthError(res)) return;
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
-        this.newGroupName = '';
+
+        this.quickRuleName = '';
+        this.quickRuleValue = '';
+        this.quickRuleField = 'Name';
         await this.fetchMonzoConfig();
+        this.flash('Rule added!');
       } catch (e) {
-        this.flash('Failed to add group: ' + e.message, true);
+        this.flash('Failed to add rule: ' + e.message, true);
       }
     },
 
@@ -391,7 +389,7 @@ document.addEventListener('alpine:init', () => {
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || `HTTP ${res.status}`); }
         await this.fetchMonzoConfig();
       } catch (e) {
-        this.flash('Failed to add criterion: ' + e.message, true);
+        this.flash('Failed to add condition: ' + e.message, true);
       }
     },
 
