@@ -1,10 +1,70 @@
-import { query, queryFirst } from '../../../lib/db.js';
+import { query, queryFirst, execute } from '../../../lib/db.js';
 import { calculateBalance, getPaymentStreaks, formatCurrency } from '../../../lib/interest.js';
+import { getAccessToken, fetchSheetRows, matchTransactions } from '../../../lib/monzo.js';
+
+// Background Monzo sync — runs if 30+ minutes since last sync
+async function tryAutoSync(env) {
+  try {
+    const config = await queryFirst(env.DB, 'SELECT * FROM monzo_config WHERE id = 1');
+    if (!config?.google_sheet_id || !env.GOOGLE_SA_KEY) return;
+
+    // Check if enough time has passed
+    if (config.last_sync_at) {
+      const lastSync = new Date(config.last_sync_at).getTime();
+      const interval = (config.sync_interval_minutes || 30) * 60 * 1000;
+      if (Date.now() - lastSync < interval) return;
+    }
+
+    // Get pending payments and active criteria
+    const pendingPayments = await query(env.DB, "SELECT * FROM payments WHERE status = 'pending' ORDER BY payment_date ASC");
+    if (pendingPayments.length === 0) {
+      await execute(env.DB, "UPDATE monzo_config SET last_sync_at = datetime('now') WHERE id = 1");
+      return;
+    }
+
+    const criteria = await query(env.DB, 'SELECT * FROM monzo_criteria WHERE is_active = 1');
+    if (criteria.length === 0) return;
+
+    // Group criteria by group_name
+    const criteriaGroups = {};
+    for (const c of criteria) {
+      if (!criteriaGroups[c.group_name]) criteriaGroups[c.group_name] = [];
+      criteriaGroups[c.group_name].push({ field: c.field, match_type: c.match_type, match_value: c.match_value });
+    }
+
+    // Fetch sheet
+    const accessToken = await getAccessToken(env.GOOGLE_SA_KEY);
+    const rows = await fetchSheetRows(accessToken, config.google_sheet_id, config.sheet_name || 'Personal Account Transactions');
+    if (rows.length < 2) return;
+
+    const headers = rows[0];
+    const matches = await matchTransactions(rows, headers, pendingPayments, criteriaGroups);
+
+    // Auto-validate matched payments
+    for (const match of matches) {
+      await execute(env.DB,
+        "UPDATE payments SET status = 'validated', validated_at = datetime('now'), validation_source = 'monzo', monzo_match_ref = ? WHERE id = ?",
+        [`Row ${match.matchedRow}`, match.paymentId]
+      );
+      await execute(env.DB,
+        'INSERT INTO audit_log (action, details) VALUES (?, ?)',
+        ['monzo_auto_validated', JSON.stringify({ paymentId: match.paymentId, matchedRow: match.matchedRow, trigger: 'dashboard_load' })]
+      );
+    }
+
+    await execute(env.DB, "UPDATE monzo_config SET last_sync_at = datetime('now') WHERE id = 1");
+  } catch (e) {
+    // Silent fail — don't block dashboard load
+  }
+}
 
 export async function onRequestGet(context) {
   const { env } = context;
 
   try {
+    // Fire Monzo sync in background (non-blocking via waitUntil)
+    context.waitUntil(tryAutoSync(env));
+
     const loanConfig = await queryFirst(env.DB, 'SELECT * FROM loan_config WHERE id = 1');
     if (!loanConfig) {
       return Response.json({ error: 'Loan not configured' }, { status: 500 });
