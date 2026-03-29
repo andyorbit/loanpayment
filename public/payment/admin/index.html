@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html
+  lang="en"
+  x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }"
+  :class="{ 'dark': darkMode }"
+>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Family Loan Tracker – Admin Panel" />
+  <title>Admin Panel – Loan Tracker</title>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['DM Sans', 'system-ui', 'sans-serif'],
+            mono: ['DM Mono', 'Fira Code', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Alpine.js 3.x (defer so DOM is ready) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/payment/css/app.css" />
+
+  <!-- Admin component -->
+  <script src="/payment/js/admin.js"></script>
+
+  <style>
+    .admin-input {
+      width: 100%;
+      background: var(--bg-base);
+      border: 2px solid var(--border);
+      border-radius: 0.625rem;
+      padding: 0.625rem 0.875rem;
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .admin-input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    }
+    .admin-input::placeholder { color: var(--text-muted); opacity: 0.7; }
+    .admin-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .admin-input-mono {
+      font-family: var(--font-mono);
+    }
+
+    .btn-sm {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.375rem 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s ease, transform 0.1s ease;
+    }
+    .btn-sm:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
+    .btn-sm:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 0.5rem;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s ease, background 0.15s ease;
+    }
+    .btn-icon:hover:not(:disabled) { opacity: 0.75; }
+    .btn-icon:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .admin-table th {
+      text-align: left;
+      padding: 0.625rem 0.75rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .admin-table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+      color: var(--text-primary);
+    }
+    .admin-table tr:last-child td { border-bottom: none; }
+    .admin-table tbody tr {
+      transition: background 0.12s ease;
+    }
+    .admin-table tbody tr:hover {
+      background: rgba(99,91,255,0.04);
+    }
+
+    .section-tab {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.875rem;
+      border-radius: 0.625rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      transition: background 0.15s ease, color 0.15s ease;
+      white-space: nowrap;
+    }
+    .section-tab:hover {
+      background: rgba(99,91,255,0.07);
+      color: #6366f1;
+    }
+    .section-tab.active {
+      background: rgba(99,91,255,0.12);
+      color: #6366f1;
+      font-weight: 600;
+    }
+    .dark .section-tab.active { color: #a5b4fc; background: rgba(99,91,255,0.18); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .audit-details {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      white-space: pre;
+      overflow-x: auto;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      background: var(--bg-base);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      max-height: 200px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.8s linear infinite; }
+  </style>
+</head>
+
+<body class="min-h-screen" style="background-color: var(--bg-base); color: var(--text-primary);">
+
+  <div x-data="adminPanel" class="flex min-h-screen">
+
+    <!-- ── SIDEBAR (desktop) ─────────────────────────────────── -->
+    <aside class="sidebar hidden lg:flex flex-col w-60 shrink-0 fixed top-0 left-0 h-full z-30 px-4 py-6">
+
+      <!-- Logo / brand -->
+      <div class="flex items-center gap-3 px-2 mb-8">
+        <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+        </div>
+        <div>
+          <div class="text-sm font-semibold leading-tight" style="color: var(--text-primary)">Level Up</div>
+          <div class="text-xs" style="color: var(--text-muted)">Loan Tracker</div>
+        </div>
+      </div>
+
+      <!-- Nav links -->
+      <nav class="flex flex-col gap-1 flex-1">
+        <a href="/payment/" class="nav-link">
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+          </svg>
+          Dashboard
+        </a>
+        <a href="/payment/payments" class="nav-link">
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" />
+          </svg>
+          Payments
+        </a>
+        <a href="/payment/calculator" class="nav-link">
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V13.5Zm0 2.25h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V18Zm2.498-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm2.504-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm2.498-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5ZM8.25 6h7.5v2.25h-7.5V6ZM12 2.25c-1.892 0-3.758.11-5.593.322C5.307 2.7 4.5 3.65 4.5 4.757V19.5a2.25 2.25 0 0 0 2.25 2.25h10.5a2.25 2.25 0 0 0 2.25-2.25V4.757c0-1.108-.806-2.057-1.907-2.185A48.507 48.507 0 0 0 12 2.25Z" />
+          </svg>
+          Calculator
+        </a>
+        <a href="/payment/admin/" class="nav-link active">
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          </svg>
+          Admin
+        </a>
+      </nav>
+
+      <!-- Dark mode + logout -->
+      <div class="mt-auto pt-4 border-t space-y-1" style="border-color: var(--border)">
+        <button
+          @click="darkMode = !darkMode; toggleDarkMode()"
+          class="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
+          style="color: var(--text-muted)"
+          aria-label="Toggle dark mode"
+        >
+          <span x-show="!darkMode" class="text-base">🌙</span>
+          <span x-show="darkMode"  class="text-base">☀️</span>
+          <span x-text="darkMode ? 'Light mode' : 'Dark mode'"></span>
+        </button>
+        <a href="/payment/api/admin/logout"
+           class="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
+           style="color: var(--text-muted)">
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+          </svg>
+          Logout
+        </a>
+      </div>
+    </aside>
+
+    <!-- ── MAIN CONTENT ─────────────────────────────────────── -->
+    <main class="flex-1 lg:ml-60 pb-24 lg:pb-10">
+
+      <!-- Global flash messages -->
+      <div class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80" style="pointer-events:none">
+        <div
+          x-show="successMsg"
+          x-transition:enter="transition ease-out duration-300"
+          x-transition:enter-start="opacity-0 translate-x-4"
+          x-transition:enter-end="opacity-100 translate-x-0"
+          x-transition:leave="transition ease-in duration-200"
+          x-transition:leave-end="opacity-0 translate-x-4"
+          class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium"
+          style="background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; pointer-events:auto"
+        >
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+          <span x-text="successMsg"></span>
+        </div>
+        <div
+          x-show="error"
+          x-transition:enter="transition ease-out duration-300"
+          x-transition:enter-start="opacity-0 translate-x-4"
+          x-transition:enter-end="opacity-100 translate-x-0"
+          x-transition:leave="transition ease-in duration-200"
+          x-transition:leave-end="opacity-0 translate-x-4"
+          class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium"
+          style="background:#fff1f2; color:#be123c; border:1px solid #fecdd3; pointer-events:auto"
+        >
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+          </svg>
+          <span x-text="error"></span>
+        </div>
+      </div>
+
+      <div class="px-4 pt-5 lg:px-6 lg:pt-6 max-w-6xl mx-auto space-y-6">
+
+        <!-- ── HEADER ────────────────────────────────────────── -->
+        <header class="flex items-center justify-between fade-up">
+          <div>
+            <h1 class="text-2xl font-semibold tracking-tight" style="color: var(--text-primary)">
+              Admin Panel
+            </h1>
+            <p class="text-sm mt-0.5" style="color: var(--text-muted)">Manage payments, settings and integrations</p>
+          </div>
+          <!-- Dark mode toggle (mobile) -->
+          <button
+            @click="darkMode = !darkMode; toggleDarkMode()"
+            class="lg:hidden flex items-center justify-center w-10 h-10 rounded-xl border transition-colors"
+            style="border-color: var(--border); background: var(--bg-card)"
+            aria-label="Toggle dark mode"
+          >
+            <span x-show="!darkMode" class="text-lg">🌙</span>
+            <span x-show="darkMode"  class="text-lg">☀️</span>
+          </button>
+        </header>
+
+        <!-- ── SECTION TABS ───────────────────────────────────── -->
+        <div class="fade-up fade-up-1 flex items-center gap-1 overflow-x-auto pb-1" style="scrollbar-width:none">
+          <button @click="activeSection='payments'"   :class="activeSection==='payments'   ? 'section-tab active' : 'section-tab'">
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" />
+            </svg>
+            Payments
+          </button>
+          <button @click="activeSection='queue'"      :class="activeSection==='queue'      ? 'section-tab active' : 'section-tab'">
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            Queue
+            <span x-show="pendingCount > 0" class="badge bg-amber-500 text-white" x-text="pendingCount"></span>
+          </button>
+          <button @click="activeSection='settings'"   :class="activeSection==='settings'   ? 'section-tab active' : 'section-tab'">
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.559.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.272-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+            Loan Settings
+          </button>
+          <button @click="activeSection='admin'"      :class="activeSection==='admin'      ? 'section-tab active' : 'section-tab'">
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+            </svg>
+            Account
+          </button>
+          <button @click="activeSection='monzo'"      :class="activeSection==='monzo'      ? 'section-tab active' : 'section-tab'">
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+            </svg>
+            Monzo Sync
+          </button>
+          <button @click="activeSection='audit'"      :class="activeSection==='audit'      ? 'section-tab active' : 'section-tab'">
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+            </svg>
+            Audit Log
+          </button>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════
+             A. PAYMENT MANAGEMENT TABLE
+        ════════════════════════════════════════════════════ -->
+        <section x-show="activeSection === 'payments'" class="fade-up fade-up-2 space-y-4">
+          <div class="card overflow-hidden">
+            <!-- Card header -->
+            <div class="flex items-center justify-between px-5 py-4 border-b" style="border-color: var(--border)">
+              <div>
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Payment Management</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">
+                  <span x-text="payments.length"></span> total payments
+                </p>
+              </div>
+              <button
+                @click="fetchPayments()"
+                class="btn-sm"
+                style="background: rgba(99,91,255,0.1); color: #6366f1;"
+                :disabled="paymentsLoading"
+                title="Refresh"
+              >
+                <svg class="w-3.5 h-3.5" :class="paymentsLoading ? 'spin' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                Refresh
+              </button>
+            </div>
+
+            <!-- Loading skeleton -->
+            <div x-show="paymentsLoading" class="p-5 space-y-3">
+              <template x-for="i in 5">
+                <div class="flex gap-3 items-center">
+                  <div class="skeleton h-4 w-24 rounded"></div>
+                  <div class="skeleton h-4 w-20 rounded"></div>
+                  <div class="skeleton h-4 flex-1 rounded"></div>
+                  <div class="skeleton h-6 w-20 rounded-full"></div>
+                </div>
+              </template>
+            </div>
+
+            <!-- Empty state -->
+            <div x-show="!paymentsLoading && payments.length === 0" class="px-5 py-12 text-center" style="color: var(--text-muted)">
+              <svg class="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" />
+              </svg>
+              <p class="text-sm">No payments recorded yet.</p>
+            </div>
+
+            <!-- Table -->
+            <div x-show="!paymentsLoading && payments.length > 0" class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Note</th>
+                    <th>Status</th>
+                    <th class="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="payment in payments" :key="payment.id">
+                    <tr>
+                      <!-- DATE -->
+                      <td>
+                        <span x-show="editingId !== payment.id" class="font-mono text-xs" x-text="formatDate(payment.date)"></span>
+                        <input
+                          x-show="editingId === payment.id"
+                          type="date"
+                          x-model="editDraft.date"
+                          class="admin-input admin-input-mono"
+                          style="width: 140px; font-size: 0.8rem; padding: 0.375rem 0.625rem;"
+                        />
+                      </td>
+
+                      <!-- AMOUNT -->
+                      <td>
+                        <span x-show="editingId !== payment.id" class="font-mono font-medium" x-text="formatAmount(payment.amount)"></span>
+                        <input
+                          x-show="editingId === payment.id"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          x-model="editDraft.amount"
+                          class="admin-input admin-input-mono"
+                          style="width: 110px; font-size: 0.85rem; padding: 0.375rem 0.625rem;"
+                          placeholder="0.00"
+                        />
+                      </td>
+
+                      <!-- NOTE -->
+                      <td style="max-width: 220px;">
+                        <span x-show="editingId !== payment.id" class="truncate block text-sm" style="color: var(--text-muted)" x-text="payment.note || '—'"></span>
+                        <input
+                          x-show="editingId === payment.id"
+                          type="text"
+                          x-model="editDraft.note"
+                          class="admin-input"
+                          style="font-size: 0.85rem; padding: 0.375rem 0.625rem;"
+                          placeholder="Note (optional)"
+                        />
+                      </td>
+
+                      <!-- STATUS -->
+                      <td>
+                        <span
+                          class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
+                          :class="statusBadgeClass(payment.status)"
+                          x-text="statusLabel(payment.status)"
+                        ></span>
+                      </td>
+
+                      <!-- ACTIONS -->
+                      <td>
+                        <div class="flex items-center justify-end gap-1">
+
+                          <!-- Edit / Save / Cancel -->
+                          <template x-if="editingId !== payment.id">
+                            <button
+                              @click="startEdit(payment)"
+                              class="btn-icon"
+                              style="background: rgba(99,91,255,0.1); color: #6366f1;"
+                              title="Edit payment"
+                            >
+                              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+                              </svg>
+                            </button>
+                          </template>
+                          <template x-if="editingId === payment.id">
+                            <div class="flex items-center gap-1">
+                              <button
+                                @click="saveEdit(payment.id)"
+                                class="btn-icon"
+                                style="background: rgba(21,128,61,0.12); color: #15803d;"
+                                title="Save"
+                              >
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                </svg>
+                              </button>
+                              <button
+                                @click="cancelEdit()"
+                                class="btn-icon"
+                                style="background: rgba(99,91,255,0.08); color: var(--text-muted);"
+                                title="Cancel"
+                              >
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          </template>
+
+                          <!-- Validate -->
+                          <button
+                            x-show="payment.status !== 'validated'"
+                            @click="setStatus(payment.id, 'validated')"
+                            class="btn-icon"
+                            style="background: rgba(21,128,61,0.1); color: #15803d;"
+                            title="Validate payment"
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                          </button>
+
+                          <!-- Reject -->
+                          <button
+                            x-show="payment.status !== 'rejected'"
+                            @click="setStatus(payment.id, 'rejected')"
+                            class="btn-icon"
+                            style="background: rgba(190,18,60,0.08); color: #be123c;"
+                            title="Reject payment"
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+
+                          <!-- Delete -->
+                          <button
+                            @click="deletePayment(payment.id)"
+                            class="btn-icon"
+                            style="background: rgba(190,18,60,0.06); color: #be123c;"
+                            title="Delete payment"
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                            </svg>
+                          </button>
+
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             F. VALIDATION QUEUE
+        ════════════════════════════════════════════════════ -->
+        <section x-show="activeSection === 'queue'" class="fade-up fade-up-2 space-y-4">
+          <div class="card overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b" style="border-color: var(--border)">
+              <div class="flex items-center gap-3">
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Validation Queue</h2>
+                <span
+                  x-show="pendingCount > 0"
+                  class="badge bg-amber-500 text-white text-xs"
+                  x-text="pendingCount + ' pending'"
+                  style="padding: 2px 8px; border-radius: 999px; height: auto;"
+                ></span>
+              </div>
+            </div>
+
+            <!-- Empty -->
+            <div x-show="pendingCount === 0" class="px-5 py-12 text-center" style="color: var(--text-muted)">
+              <svg class="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+              <p class="text-sm font-medium">All caught up!</p>
+              <p class="text-xs mt-1 opacity-70">No payments awaiting validation.</p>
+            </div>
+
+            <!-- Queue table -->
+            <div x-show="pendingCount > 0" class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Note</th>
+                    <th class="text-right">Quick Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="payment in pendingPayments" :key="payment.id">
+                    <tr>
+                      <td class="font-mono text-xs" x-text="formatDate(payment.date)"></td>
+                      <td class="font-mono font-semibold" x-text="formatAmount(payment.amount)"></td>
+                      <td class="text-sm" style="color: var(--text-muted)" x-text="payment.note || '—'"></td>
+                      <td>
+                        <div class="flex items-center justify-end gap-2">
+                          <button
+                            @click="setStatus(payment.id, 'validated')"
+                            class="btn-sm"
+                            style="background: rgba(21,128,61,0.12); color: #15803d;"
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                            Validate
+                          </button>
+                          <button
+                            @click="setStatus(payment.id, 'rejected')"
+                            class="btn-sm"
+                            style="background: rgba(190,18,60,0.1); color: #be123c;"
+                          >
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             B. LOAN SETTINGS
+        ════════════════════════════════════════════════════ -->
+        <section x-show="activeSection === 'settings'" class="fade-up fade-up-2">
+          <div class="grid lg:grid-cols-2 gap-5">
+
+            <!-- Loan settings form -->
+            <div class="card p-5 space-y-5">
+              <div>
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Loan Settings</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">Core loan parameters</p>
+              </div>
+
+              <div x-show="settingsLoading" class="space-y-3">
+                <div class="skeleton h-10 rounded-lg"></div>
+                <div class="skeleton h-10 rounded-lg"></div>
+                <div class="skeleton h-10 rounded-lg"></div>
+              </div>
+
+              <div x-show="!settingsLoading" class="space-y-4">
+                <div>
+                  <label class="section-heading block mb-1.5">Original Amount (£)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    x-model="settingsDraft.originalAmount"
+                    class="admin-input admin-input-mono"
+                    placeholder="10000.00"
+                  />
+                </div>
+                <div>
+                  <label class="section-heading block mb-1.5">Start Date</label>
+                  <input
+                    type="date"
+                    x-model="settingsDraft.startDate"
+                    class="admin-input admin-input-mono"
+                  />
+                </div>
+                <div>
+                  <label class="section-heading block mb-1.5">Annual Interest Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    x-model="settingsDraft.annualRate"
+                    class="admin-input admin-input-mono"
+                    placeholder="3.5"
+                  />
+                </div>
+
+                <button
+                  @click="saveSettings()"
+                  :disabled="settingsSaving"
+                  class="btn-primary"
+                  style="width: auto; padding: 0.625rem 1.25rem;"
+                >
+                  <svg x-show="!settingsSaving" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 3.75V16.5L12 14.25 7.5 16.5V3.75m9 0H18A2.25 2.25 0 0 1 20.25 6v12A2.25 2.25 0 0 1 18 20.25H6A2.25 2.25 0 0 1 3.75 18V6A2.25 2.25 0 0 1 6 3.75h1.5m9 0h-9" />
+                  </svg>
+                  <svg x-show="settingsSaving" class="w-4 h-4 spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                  </svg>
+                  <span x-text="settingsSaving ? 'Saving…' : 'Save Settings'"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Rate change history -->
+            <div class="card p-5">
+              <div class="mb-4">
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Rate History</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">Interest rate changes over time</p>
+              </div>
+
+              <div x-show="settingsLoading" class="space-y-2">
+                <template x-for="i in 3">
+                  <div class="skeleton h-10 rounded-lg"></div>
+                </template>
+              </div>
+
+              <div x-show="!settingsLoading">
+                <div x-show="rateHistory.length === 0" class="py-8 text-center text-sm" style="color: var(--text-muted)">
+                  No rate history recorded.
+                </div>
+                <div x-show="rateHistory.length > 0" class="space-y-2">
+                  <template x-for="(entry, idx) in rateHistory" :key="idx">
+                    <div class="flex items-center justify-between px-3 py-2.5 rounded-lg" style="background: var(--bg-base); border: 1px solid var(--border);">
+                      <div>
+                        <span class="text-xs font-mono font-medium" x-text="entry.rate + '%'"></span>
+                        <span class="text-xs ml-2" style="color: var(--text-muted)" x-text="formatDate(entry.date)"></span>
+                      </div>
+                      <span x-show="idx === 0" class="text-xs px-2 py-0.5 rounded-full font-medium" style="background: rgba(99,91,255,0.1); color: #6366f1;">Current</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             C. ADMIN ACCOUNT SETTINGS
+        ════════════════════════════════════════════════════ -->
+        <section x-show="activeSection === 'admin'" class="fade-up fade-up-2">
+          <div class="grid lg:grid-cols-2 gap-5">
+
+            <!-- Password change -->
+            <div class="card p-5 space-y-4">
+              <div>
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Change Password</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">Update your admin password</p>
+              </div>
+
+              <div
+                x-show="passwordError"
+                class="error-card text-sm"
+                x-text="passwordError"
+              ></div>
+
+              <div class="space-y-3">
+                <div>
+                  <label class="section-heading block mb-1.5">New Password</label>
+                  <input
+                    type="password"
+                    x-model="newPassword"
+                    class="admin-input"
+                    placeholder="Enter new password"
+                    autocomplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label class="section-heading block mb-1.5">Confirm Password</label>
+                  <input
+                    type="password"
+                    x-model="confirmPassword"
+                    @keydown.enter="changePassword()"
+                    class="admin-input"
+                    placeholder="Confirm new password"
+                    autocomplete="new-password"
+                  />
+                </div>
+              </div>
+
+              <button
+                @click="changePassword()"
+                :disabled="passwordSaving || !newPassword || !confirmPassword"
+                class="btn-primary"
+                style="width: auto; padding: 0.625rem 1.25rem;"
+              >
+                <svg x-show="!passwordSaving" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                </svg>
+                <svg x-show="passwordSaving" class="w-4 h-4 spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span x-text="passwordSaving ? 'Saving…' : 'Update Password'"></span>
+              </button>
+            </div>
+
+            <!-- Theme & preferences -->
+            <div class="card p-5 space-y-4">
+              <div>
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Preferences</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">Display and interface settings</p>
+              </div>
+
+              <div class="flex items-center justify-between py-3 border-b" style="border-color: var(--border)">
+                <div>
+                  <div class="text-sm font-medium" style="color: var(--text-primary)">Dark Mode</div>
+                  <div class="text-xs mt-0.5" style="color: var(--text-muted)">Toggle between light and dark theme</div>
+                </div>
+                <button
+                  @click="darkMode = !darkMode; toggleDarkMode()"
+                  class="toggle-track shrink-0"
+                  :class="{ 'on': darkMode }"
+                  role="switch"
+                  :aria-checked="darkMode"
+                  aria-label="Toggle dark mode"
+                >
+                  <div class="toggle-thumb"></div>
+                </button>
+              </div>
+
+              <div class="pt-1">
+                <p class="text-xs" style="color: var(--text-muted)">
+                  Preference is saved locally in your browser and persists across sessions.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             D. MONZO INTEGRATION (Phase 4 placeholder)
+        ════════════════════════════════════════════════════ -->
+        <section x-show="activeSection === 'monzo'" class="fade-up fade-up-2">
+          <div class="grid lg:grid-cols-2 gap-5">
+
+            <!-- Sync config -->
+            <div class="card p-5 space-y-4">
+              <div class="flex items-start justify-between">
+                <div>
+                  <h2 class="text-base font-semibold" style="color: var(--text-primary)">Monzo Integration</h2>
+                  <p class="text-xs mt-0.5" style="color: var(--text-muted)">Google Sheet sync — Phase 4</p>
+                </div>
+                <span class="text-xs px-2 py-1 rounded-full font-semibold" style="background: rgba(180,83,9,0.12); color: #b45309;">
+                  Coming Soon
+                </span>
+              </div>
+
+              <div class="space-y-3">
+                <div>
+                  <label class="section-heading block mb-1.5">Google Sheet ID</label>
+                  <input
+                    type="text"
+                    x-model="monzoSheetId"
+                    class="admin-input admin-input-mono"
+                    placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+                  />
+                </div>
+
+                <div>
+                  <label class="section-heading block mb-1.5">Sender Patterns</label>
+                  <div class="space-y-2 mb-2">
+                    <template x-for="(pattern, idx) in monzoPatterns" :key="idx">
+                      <div class="flex items-center gap-2">
+                        <span class="flex-1 font-mono text-xs px-3 py-2 rounded-lg" style="background: var(--bg-base); border: 1px solid var(--border); color: var(--text-primary)" x-text="pattern"></span>
+                        <button
+                          @click="removePattern(idx)"
+                          class="btn-icon shrink-0"
+                          style="background: rgba(190,18,60,0.08); color: #be123c; width:28px; height:28px;"
+                          title="Remove pattern"
+                        >
+                          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                  <div class="flex gap-2">
+                    <input
+                      type="text"
+                      x-model="newPattern"
+                      @keydown.enter="addPattern()"
+                      class="admin-input flex-1"
+                      style="font-size: 0.85rem;"
+                      placeholder="e.g. Mum, Family, Dad"
+                    />
+                    <button
+                      @click="addPattern()"
+                      class="btn-sm shrink-0"
+                      style="background: rgba(99,91,255,0.1); color: #6366f1;"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                @click="syncMonzo()"
+                :disabled="monzoSyncing"
+                class="btn-primary"
+                style="width: auto; padding: 0.625rem 1.25rem;"
+              >
+                <svg x-show="!monzoSyncing" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                <svg x-show="monzoSyncing" class="w-4 h-4 spin" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span x-text="monzoSyncing ? 'Syncing…' : 'Sync Now'"></span>
+              </button>
+            </div>
+
+            <!-- Sync status -->
+            <div class="card p-5 space-y-4">
+              <div>
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Sync Status</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">Last synchronisation details</p>
+              </div>
+
+              <div class="flex items-center gap-3 py-3 px-4 rounded-xl" style="background: var(--bg-base); border: 1px solid var(--border);">
+                <div class="w-2.5 h-2.5 rounded-full shrink-0" :class="monzoLastSync ? 'bg-green-500' : 'bg-amber-400'"></div>
+                <div>
+                  <div class="text-sm font-medium" style="color: var(--text-primary)" x-text="monzoLastSync ? 'Last synced' : 'Never synced'"></div>
+                  <div class="text-xs mt-0.5" style="color: var(--text-muted)" x-text="monzoLastSync ? formatAuditTime(monzoLastSync) : 'Configure above and click Sync Now'"></div>
+                </div>
+              </div>
+
+              <div class="text-xs leading-relaxed p-3 rounded-lg" style="background: rgba(180,83,9,0.06); border: 1px solid rgba(180,83,9,0.2); color: #b45309;">
+                <strong>Phase 4 placeholder.</strong> This section will connect to a Google Sheet exported from Monzo and automatically import matching transactions as payments.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════════════════
+             E. AUDIT LOG
+        ════════════════════════════════════════════════════ -->
+        <section x-show="activeSection === 'audit'" class="fade-up fade-up-2">
+          <div class="card overflow-hidden">
+            <div class="flex items-center justify-between px-5 py-4 border-b" style="border-color: var(--border)">
+              <div>
+                <h2 class="text-base font-semibold" style="color: var(--text-primary)">Audit Log</h2>
+                <p class="text-xs mt-0.5" style="color: var(--text-muted)">
+                  <span x-text="auditLog.length"></span> events — most recent first
+                </p>
+              </div>
+              <button
+                @click="fetchSettings()"
+                class="btn-sm"
+                style="background: rgba(99,91,255,0.1); color: #6366f1;"
+                :disabled="settingsLoading"
+                title="Refresh audit log"
+              >
+                <svg class="w-3.5 h-3.5" :class="settingsLoading ? 'spin' : ''" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                Refresh
+              </button>
+            </div>
+
+            <!-- Empty -->
+            <div x-show="!settingsLoading && auditLog.length === 0" class="px-5 py-12 text-center" style="color: var(--text-muted)">
+              <svg class="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+              </svg>
+              <p class="text-sm">No audit events yet.</p>
+            </div>
+
+            <!-- Table -->
+            <div x-show="auditLog.length > 0" class="table-wrap" style="max-height: 520px; overflow-y: auto;">
+              <table class="admin-table">
+                <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Action</th>
+                    <th>Details</th>
+                    <th class="text-right" style="width:50px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(entry, idx) in auditLog" :key="idx">
+                    <tr style="cursor: pointer;" @click="toggleAuditRow(idx)">
+                      <td class="font-mono text-xs whitespace-nowrap" x-text="formatAuditTime(entry.timestamp || entry.ts)"></td>
+                      <td>
+                        <span class="text-sm font-medium" x-text="entry.action || entry.type || '—'"></span>
+                      </td>
+                      <td class="text-xs" style="color: var(--text-muted); max-width: 260px;">
+                        <span
+                          x-show="expandedAuditId !== idx"
+                          class="truncate block"
+                          x-text="typeof entry.details === 'string' ? entry.details : JSON.stringify(entry.details || entry.data || '')"
+                        ></span>
+                        <div x-show="expandedAuditId === idx" @click.stop>
+                          <pre class="audit-details" x-text="formatAuditDetails(entry.details || entry.data || entry)"></pre>
+                        </div>
+                      </td>
+                      <td class="text-right">
+                        <svg
+                          class="w-3.5 h-3.5 inline-block transition-transform duration-200"
+                          :style="expandedAuditId === idx ? 'transform: rotate(180deg)' : ''"
+                          fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
+                          style="color: var(--text-muted)"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /max-w-6xl -->
+    </main>
+
+    <!-- ── BOTTOM NAV (mobile) ──────────────────────────────── -->
+    <nav class="bottom-nav fixed bottom-0 left-0 right-0 flex lg:hidden z-30" aria-label="Mobile navigation">
+      <a href="/payment/" class="bottom-tab">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+        </svg>
+        <span>Home</span>
+      </a>
+      <a href="/payment/payments" class="bottom-tab">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" />
+        </svg>
+        <span>Payments</span>
+      </a>
+      <a href="/payment/admin/" class="bottom-tab active">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+        <span>Admin</span>
+      </a>
+    </nav>
+
+  </div><!-- /adminPanel -->
+</body>
+</html>

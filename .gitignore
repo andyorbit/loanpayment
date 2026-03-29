@@ -1,0 +1,7 @@
+node_modules/
+Key/
+.dev.vars
+.wrangler/
+*.db
+.omc/
+Plan/

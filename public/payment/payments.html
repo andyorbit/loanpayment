@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html
+  lang="en"
+  x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }"
+  :class="{ 'dark': darkMode }"
+>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Family Loan Tracker – payment history timeline" />
+  <title>Payment History – Family Loan Tracker</title>
+
+  <!-- Tailwind Play CDN -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['DM Sans', 'system-ui', 'sans-serif'],
+            mono: ['DM Mono', 'Fira Code', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Alpine.js 3.x -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/payment/css/app.css" />
+
+  <style>
+    /* ── Timeline ──────────────────────────────────────────── */
+    .timeline-line {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .dark .timeline-line {
+      background: #2a2847;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -5px;
+      top: 1.375rem;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #6366f1;
+      border: 2px solid var(--bg-base);
+      z-index: 1;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .timeline-item:hover .timeline-dot {
+      transform: scale(1.4);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+    }
+
+    .timeline-dot.dot-large {
+      background: #10b981;
+      width: 14px;
+      height: 14px;
+      left: -6px;
+    }
+
+    .timeline-dot.dot-amber {
+      background: #f59e0b;
+    }
+
+    .timeline-connector {
+      position: absolute;
+      left: 7px;
+      top: 1.75rem;
+      width: 20px;
+      height: 2px;
+      background: var(--border);
+    }
+
+    /* ── Card enter animation ─────────────────────────────── */
+    @keyframes slide-in-right {
+      from {
+        opacity: 0;
+        transform: translateX(-16px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .timeline-card-enter {
+      animation: slide-in-right 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    /* staggered delays via CSS custom property */
+    .timeline-item:nth-child(1)  .timeline-card-enter { animation-delay: 0.04s; }
+    .timeline-item:nth-child(2)  .timeline-card-enter { animation-delay: 0.08s; }
+    .timeline-item:nth-child(3)  .timeline-card-enter { animation-delay: 0.12s; }
+    .timeline-item:nth-child(4)  .timeline-card-enter { animation-delay: 0.16s; }
+    .timeline-item:nth-child(5)  .timeline-card-enter { animation-delay: 0.20s; }
+    .timeline-item:nth-child(6)  .timeline-card-enter { animation-delay: 0.24s; }
+    .timeline-item:nth-child(7)  .timeline-card-enter { animation-delay: 0.28s; }
+    .timeline-item:nth-child(8)  .timeline-card-enter { animation-delay: 0.32s; }
+    .timeline-item:nth-child(9)  .timeline-card-enter { animation-delay: 0.36s; }
+    .timeline-item:nth-child(10) .timeline-card-enter { animation-delay: 0.40s; }
+    .timeline-item:nth-child(n+11) .timeline-card-enter { animation-delay: 0.44s; }
+
+    /* ── Month group header ───────────────────────────────── */
+    .month-header {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      padding: 0.25rem 0.5rem;
+      background: var(--bg-base);
+      border-radius: 0.375rem;
+      display: inline-block;
+      margin-bottom: 0.75rem;
+      margin-left: 1.75rem;
+    }
+
+    /* ── Summary bar ──────────────────────────────────────── */
+    .summary-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+    }
+
+    .summary-stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+
+    .summary-stat-label {
+      font-size: 0.7rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted);
+    }
+
+    /* ── Status badge ─────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .badge-validated {
+      background: rgba(16, 185, 129, 0.12);
+      color: #059669;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .dark .badge-validated {
+      background: rgba(16, 185, 129, 0.15);
+      color: #6ee7b7;
+      border-color: rgba(110, 231, 183, 0.2);
+    }
+
+    .badge-pending {
+      background: rgba(245, 158, 11, 0.12);
+      color: #d97706;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
+    .dark .badge-pending {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fcd34d;
+      border-color: rgba(252, 211, 77, 0.2);
+    }
+
+    .badge-rejected {
+      background: rgba(239, 68, 68, 0.12);
+      color: #dc2626;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .dark .badge-rejected {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border-color: rgba(252, 165, 165, 0.2);
+    }
+
+    /* ── Select / filter controls ─────────────────────────── */
+    .filter-select {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.375rem 0.625rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2' stroke='%236b6892'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m19.5 8.25-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.5rem center;
+      background-size: 14px;
+      padding-right: 1.75rem;
+    }
+
+    .filter-select:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    }
+
+    /* ── Export button ────────────────────────────────────── */
+    .btn-export {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.375rem 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
+      text-decoration: none;
+      font-family: var(--font-sans);
+    }
+
+    .btn-export:hover {
+      border-color: #6366f1;
+      color: #6366f1;
+      transform: translateY(-1px);
+    }
+
+    /* ── Left-border accent on cards ─────────────────────── */
+    .card-accent-green  { border-left: 3px solid #10b981 !important; }
+    .card-accent-amber  { border-left: 3px solid #f59e0b !important; }
+    .card-accent-normal { border-left: 3px solid var(--border) !important; }
+
+    /* ── Empty state ──────────────────────────────────────── */
+    .empty-icon-ring {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(99, 102, 241, 0.08);
+      border: 2px dashed rgba(99, 102, 241, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen" style="background-color: var(--bg-base); color: var(--text-primary);">
+
+  <div
+    x-data="paymentHistory"
+    class="flex min-h-screen"
+  >
+
+    <!-- ── SIDEBAR (desktop only) ─────────────────────────── -->
+    <aside class="sidebar hidden lg:flex flex-col w-60 shrink-0 fixed top-0 left-0 h-full z-30 px-4 py-6">
+
+      <!-- Logo / brand -->
+      <div class="flex items-center gap-3 px-2 mb-8">
+        <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+          </svg>
+        </div>
+        <div>
+          <div class="text-sm font-semibold leading-tight" style="color: var(--text-primary)">Level Up</div>
+          <div class="text-xs" style="color: var(--text-muted)">Loan Tracker</div>
+        </div>
+      </div>
+
+      <!-- Nav links -->
+      <nav class="flex flex-col gap-1 flex-1">
+        <a href="/payment/" class="nav-link">
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+          </svg>
+          Dashboard
+        </a>
+        <a href="/payment/payments" class="nav-link active">
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" />
+          </svg>
+          Payments
+        </a>
+        <a href="/payment/calculator" class="nav-link">
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V13.5Zm0 2.25h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V18Zm2.498-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm2.504-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm2.498-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5ZM8.25 6h7.5v2.25h-7.5V6ZM12 2.25c-1.892 0-3.758.11-5.593.322C5.307 2.7 4.5 3.65 4.5 4.757V19.5a2.25 2.25 0 0 0 2.25 2.25h10.5a2.25 2.25 0 0 0 2.25-2.25V4.757c0-1.108-.806-2.057-1.907-2.185A48.507 48.507 0 0 0 12 2.25Z" />
+          </svg>
+          Calculator
+        </a>
+        <a href="/payment/admin/" class="nav-link">
+          <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          </svg>
+          Admin
+        </a>
+      </nav>
+
+      <!-- Dark mode toggle (sidebar bottom) -->
+      <div class="mt-auto pt-4 border-t" style="border-color: var(--border)">
+        <button
+          @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)"
+          class="w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
+          style="color: var(--text-muted)"
+          aria-label="Toggle dark mode"
+        >
+          <span x-show="!darkMode" class="text-base">🌙</span>
+          <span x-show="darkMode"  class="text-base">☀️</span>
+          <span x-text="darkMode ? 'Light mode' : 'Dark mode'"></span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ── MAIN CONTENT ────────────────────────────────────── -->
+    <main class="flex-1 lg:ml-60 pb-24 lg:pb-8">
+      <div class="px-4 pt-5 lg:px-6 lg:pt-6 max-w-3xl mx-auto space-y-5">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <header class="flex items-start justify-between fade-up">
+          <div>
+            <h1 class="text-2xl font-semibold tracking-tight" style="color: var(--text-primary)">
+              Payment History
+            </h1>
+            <p class="text-sm mt-0.5" style="color: var(--text-muted)">
+              A record of every payment made on the loan
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Export CSV -->
+            <a
+              href="/payment/api/export?format=csv"
+              class="btn-export"
+              title="Export as CSV"
+              aria-label="Export payments as CSV"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              CSV
+            </a>
+
+            <!-- Export PDF (client-side placeholder) -->
+            <button
+              @click="exportPDF()"
+              class="btn-export"
+              title="Export as PDF"
+              aria-label="Export payments as PDF"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+              </svg>
+              PDF
+            </button>
+
+            <!-- Dark mode toggle (mobile) -->
+            <button
+              @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)"
+              class="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl border transition-colors"
+              style="border-color: var(--border); background: var(--bg-card)"
+              aria-label="Toggle dark mode"
+            >
+              <span x-show="!darkMode" class="text-base">🌙</span>
+              <span x-show="darkMode"  class="text-base">☀️</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- ── ERROR STATE ─────────────────────────────────── -->
+        <div x-show="error && !loading" class="fade-up">
+          <div class="error-card">
+            <strong>Could not load payments:</strong> <span x-text="error"></span>
+            <button @click="init()" class="ml-3 underline text-sm">Retry</button>
+          </div>
+        </div>
+
+        <!-- ── LOADING SKELETON ────────────────────────────── -->
+        <div x-show="loading" class="space-y-4">
+          <!-- Summary bar skeleton -->
+          <div class="card p-4 flex gap-6">
+            <template x-for="i in 3">
+              <div>
+                <div class="skeleton h-5 w-24 mb-1.5 rounded"></div>
+                <div class="skeleton h-3 w-16 rounded"></div>
+              </div>
+            </template>
+          </div>
+          <!-- Timeline skeleton -->
+          <div class="space-y-3">
+            <template x-for="i in 4">
+              <div class="ml-8 card p-4">
+                <div class="skeleton h-6 w-32 mb-2 rounded"></div>
+                <div class="skeleton h-3 w-24 mb-3 rounded"></div>
+                <div class="flex gap-3">
+                  <div class="skeleton h-3 w-20 rounded"></div>
+                  <div class="skeleton h-3 w-20 rounded"></div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- ── LOADED CONTENT ──────────────────────────────── -->
+        <div x-show="!loading && !error" class="space-y-5">
+
+          <!-- ── SUMMARY BAR ─────────────────────────────── -->
+          <div class="card p-4 fade-up fade-up-1">
+            <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+
+              <!-- Stats -->
+              <div class="summary-stat">
+                <span class="summary-stat-value font-mono" x-text="payments.length"></span>
+                <span class="summary-stat-label">Total Payments</span>
+              </div>
+
+              <div class="w-px h-8 shrink-0" style="background: var(--border)"></div>
+
+              <div class="summary-stat">
+                <span class="summary-stat-value font-mono" x-text="formatCurrency(totalPaid)"></span>
+                <span class="summary-stat-label">Total Paid</span>
+              </div>
+
+              <div class="w-px h-8 shrink-0" style="background: var(--border)"></div>
+
+              <div class="summary-stat">
+                <span class="summary-stat-value font-mono" x-text="payments.length ? formatCurrency(totalPaid / payments.length) : '—'"></span>
+                <span class="summary-stat-label">Average Payment</span>
+              </div>
+
+              <!-- Spacer -->
+              <div class="flex-1"></div>
+
+              <!-- Filter controls -->
+              <div class="flex items-center gap-2 flex-wrap">
+                <label class="text-xs font-medium" style="color: var(--text-muted)">Status</label>
+                <select
+                  x-model="statusFilter"
+                  class="filter-select"
+                  aria-label="Filter by status"
+                >
+                  <option value="all">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="validated">Validated</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+
+                <label class="text-xs font-medium ml-1" style="color: var(--text-muted)">Sort</label>
+                <select
+                  x-model="sortOrder"
+                  class="filter-select"
+                  aria-label="Sort by date"
+                >
+                  <option value="desc">Newest first</option>
+                  <option value="asc">Oldest first</option>
+                </select>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- ── EMPTY STATE ─────────────────────────────── -->
+          <div
+            x-show="filteredPayments.length === 0"
+            class="card p-10 flex flex-col items-center text-center gap-4 fade-up fade-up-2"
+          >
+            <div class="empty-icon-ring">
+              <svg class="w-8 h-8" style="color: #6366f1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
+              </svg>
+            </div>
+            <div>
+              <p class="font-semibold text-base mb-1" style="color: var(--text-primary)">
+                <span x-show="statusFilter === 'all'">No payments yet</span>
+                <span x-show="statusFilter !== 'all'">No matching payments</span>
+              </p>
+              <p class="text-sm" style="color: var(--text-muted)">
+                <span x-show="statusFilter === 'all'">
+                  Head to the dashboard to record your first payment.
+                </span>
+                <span x-show="statusFilter !== 'all'">
+                  Try changing the status filter above.
+                </span>
+              </p>
+            </div>
+            <a
+              href="/payment/"
+              x-show="statusFilter === 'all'"
+              class="btn-export mt-1"
+              style="color: #6366f1; border-color: rgba(99,102,241,0.35)"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
+              </svg>
+              Go to Dashboard
+            </a>
+          </div>
+
+          <!-- ── TIMELINE ────────────────────────────────── -->
+          <div
+            x-show="filteredPayments.length > 0"
+            class="fade-up fade-up-2"
+          >
+            <!-- Outer container with left margin for timeline line -->
+            <div class="relative pl-8">
+
+              <!-- The vertical timeline line -->
+              <div class="timeline-line rounded-full"></div>
+
+              <!-- Month groups -->
+              <template x-for="(group, gi) in groupedPayments" :key="gi">
+                <div class="mb-6">
+
+                  <!-- Month / year heading -->
+                  <div
+                    class="month-header -ml-8"
+                    x-text="group.label"
+                    :style="'animation-delay:' + (gi * 0.06) + 's'"
+                  ></div>
+
+                  <!-- Payment items in this month -->
+                  <div class="space-y-3">
+                    <template x-for="(payment, pi) in group.payments" :key="payment.id">
+                      <div class="timeline-item relative">
+
+                        <!-- Dot on the timeline -->
+                        <div
+                          class="timeline-dot"
+                          :class="{
+                            'dot-large': payment.amount >= 500,
+                            'dot-amber': payment._gapDays > 30 && payment.amount < 500
+                          }"
+                        ></div>
+
+                        <!-- Connector line from dot to card -->
+                        <div class="timeline-connector"></div>
+
+                        <!-- Payment card -->
+                        <div
+                          class="card p-4 ml-7 timeline-card-enter cursor-default"
+                          :class="{
+                            'card-accent-green':  payment.amount >= 500,
+                            'card-accent-amber':  payment._gapDays > 30 && payment.amount < 500,
+                            'card-accent-normal': payment.amount < 500 && payment._gapDays <= 30
+                          }"
+                        >
+                          <!-- Top row: amount + badge -->
+                          <div class="flex items-start justify-between gap-3 mb-2">
+                            <span
+                              class="font-mono font-medium text-xl leading-none tracking-tight"
+                              style="color: var(--text-primary)"
+                              x-text="formatCurrency(payment.amount)"
+                            ></span>
+
+                            <!-- Status badge -->
+                            <span
+                              class="badge shrink-0"
+                              :class="{
+                                'badge-validated': payment.status === 'validated',
+                                'badge-pending':   payment.status === 'pending',
+                                'badge-rejected':  payment.status === 'rejected'
+                              }"
+                            >
+                              <!-- Dot indicator -->
+                              <span
+                                class="w-1.5 h-1.5 rounded-full inline-block"
+                                :class="{
+                                  'bg-emerald-500': payment.status === 'validated',
+                                  'bg-amber-500':   payment.status === 'pending',
+                                  'bg-red-500':     payment.status === 'rejected'
+                                }"
+                              ></span>
+                              <span x-text="payment.status.charAt(0).toUpperCase() + payment.status.slice(1)"></span>
+                            </span>
+                          </div>
+
+                          <!-- Date -->
+                          <p
+                            class="text-sm font-medium mb-1"
+                            style="color: var(--text-muted)"
+                            x-text="formatDate(payment.payment_date)"
+                          ></p>
+
+                          <!-- Note (if present) -->
+                          <p
+                            x-show="payment.note"
+                            class="text-sm italic mb-2 leading-snug"
+                            style="color: var(--text-muted)"
+                            x-text="payment.note"
+                          ></p>
+
+                          <!-- Divider -->
+                          <hr class="my-2.5 divider" />
+
+                          <!-- Financial details row -->
+                          <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+
+                            <!-- Running balance -->
+                            <span style="color: var(--text-muted)">
+                              Balance:&nbsp;<span
+                                class="font-mono font-medium"
+                                style="color: var(--text-primary)"
+                                x-text="formatCurrency(payment._runningBalance)"
+                              ></span>
+                            </span>
+
+                            <!-- Interest accrued since last payment -->
+                            <span x-show="payment._interestAccrued > 0" class="font-medium" style="color: #d97706">
+                              Interest accrued:&nbsp;<span
+                                class="font-mono"
+                                x-text="formatCurrency(payment._interestAccrued)"
+                              ></span>
+                            </span>
+
+                            <!-- Gap warning -->
+                            <span
+                              x-show="payment._gapDays > 30"
+                              class="font-medium"
+                              style="color: #f59e0b"
+                            >
+                              <span x-text="payment._gapDays + ' days since last payment'"></span>
+                            </span>
+
+                          </div>
+
+                          <!-- Interest savings (green, small) -->
+                          <p
+                            x-show="payment._interestSaved > 0"
+                            class="text-xs font-medium mt-1.5"
+                            style="color: #059669"
+                          >
+                            This payment saved
+                            <span class="font-mono" x-text="formatCurrency(payment._interestSaved)"></span>
+                            in future interest
+                          </p>
+
+                        </div><!-- /card -->
+                      </div><!-- /timeline-item -->
+                    </template>
+                  </div>
+
+                </div><!-- /month group -->
+              </template>
+
+            </div><!-- /relative pl-8 -->
+          </div><!-- /timeline wrapper -->
+
+        </div><!-- /loaded content -->
+
+        <!-- Footer -->
+        <footer class="text-center py-4">
+          <p class="text-xs" style="color: var(--text-muted)">
+            leveluplanguage.co.uk &middot; Family Loan Tracker
+          </p>
+        </footer>
+
+      </div>
+    </main>
+
+    <!-- ── BOTTOM TAB BAR (mobile/tablet) ─────────────────── -->
+    <nav
+      class="bottom-nav lg:hidden fixed bottom-0 left-0 right-0 z-30 flex"
+      role="navigation"
+      aria-label="Main navigation"
+    >
+      <a href="/payment/" class="bottom-tab">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75" />
+        </svg>
+        Dashboard
+      </a>
+
+      <a href="/payment/payments" class="bottom-tab active">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z" />
+        </svg>
+        Payments
+      </a>
+
+      <a href="/payment/calculator" class="bottom-tab">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V13.5Zm0 2.25h.008v.008H8.25v-.008Zm0 2.25h.008v.008H8.25V18Zm2.498-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm2.504-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5Zm0 2.25h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V18Zm2.498-6.75h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V13.5ZM8.25 6h7.5v2.25h-7.5V6ZM12 2.25c-1.892 0-3.758.11-5.593.322C5.307 2.7 4.5 3.65 4.5 4.757V19.5a2.25 2.25 0 0 0 2.25 2.25h10.5a2.25 2.25 0 0 0 2.25-2.25V4.757c0-1.108-.806-2.057-1.907-2.185A48.507 48.507 0 0 0 12 2.25Z" />
+        </svg>
+        Calculator
+      </a>
+
+      <a href="/payment/admin/" class="bottom-tab">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+        Admin
+      </a>
+    </nav>
+
+  </div><!-- /x-data="paymentHistory" -->
+
+  <script>
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('paymentHistory', () => ({
+        payments: [],
+        breakdowns: [],
+        loading: true,
+        error: null,
+        sortOrder: 'desc',
+        statusFilter: 'all',
+
+        async init() {
+          this.loading = true;
+          this.error = null;
+          try {
+            const [dashRes, payRes] = await Promise.all([
+              fetch('/payment/api/dashboard'),
+              fetch('/payment/api/payments'),
+            ]);
+
+            if (!dashRes.ok) throw new Error('Dashboard API returned ' + dashRes.status);
+            if (!payRes.ok)  throw new Error('Payments API returned '  + payRes.status);
+
+            const dashData = await dashRes.json();
+            const payData  = await payRes.json();
+
+            // Normalise: payments might be at .payments or be the array itself
+            const rawPayments = Array.isArray(payData)
+              ? payData
+              : (payData.payments ?? []);
+
+            // Breakdowns from dashboard (payment_breakdown or similar)
+            this.breakdowns = dashData.payment_breakdown ?? dashData.breakdowns ?? [];
+
+            // Enrich each payment with computed fields
+            this.payments = this._enrichPayments(rawPayments, dashData);
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        /**
+         * Enrich payments with:
+         *  - _runningBalance  : balance after this payment (chronological)
+         *  - _interestAccrued : interest that accumulated since the previous payment
+         *  - _interestSaved   : rough estimate of future interest avoided
+         *  - _gapDays         : days since previous payment (0 for first)
+         */
+        _enrichPayments(raw, dashData) {
+          // Sort chronologically for running-balance computation
+          const chrono = [...raw].sort((a, b) =>
+            a.payment_date.localeCompare(b.payment_date)
+          );
+
+          const principal = dashData.principal ?? dashData.loan_amount ?? 0;
+          const annualRate = dashData.annual_rate ?? dashData.interest_rate ?? 0.05;
+          const dailyRate = annualRate / 365;
+
+          let runningBalance = principal;
+          let prevDate = null;
+
+          const enriched = chrono.map((p) => {
+            const bd = this.breakdowns.find((b) => b.paymentId === p.id || b.payment_id === p.id);
+
+            // Gap days since previous payment
+            let gapDays = 0;
+            if (prevDate) {
+              const msPerDay = 86400000;
+              gapDays = Math.round(
+                (new Date(p.payment_date + 'T00:00:00') - new Date(prevDate + 'T00:00:00')) / msPerDay
+              );
+            }
+
+            // Interest that accrued since last payment
+            const interestAccrued = bd
+              ? (bd.interest ?? 0)
+              : runningBalance * dailyRate * Math.max(gapDays, 0);
+
+            // Capital repaid (payment minus interest)
+            const capitalRepaid = bd
+              ? (bd.capital ?? Math.max(p.amount - interestAccrued, 0))
+              : Math.max(p.amount - interestAccrued, 0);
+
+            // Running balance after this payment
+            runningBalance = Math.max(runningBalance - capitalRepaid, 0);
+
+            // Interest saved: rough = capitalRepaid * dailyRate * 365 (1-year horizon)
+            const interestSaved = capitalRepaid * annualRate;
+
+            prevDate = p.payment_date;
+
+            return {
+              ...p,
+              _runningBalance: runningBalance,
+              _interestAccrued: interestAccrued,
+              _interestSaved: interestSaved,
+              _gapDays: gapDays,
+            };
+          });
+
+          return enriched;
+        },
+
+        get totalPaid() {
+          return this.payments.reduce((s, p) => s + Number(p.amount), 0);
+        },
+
+        get filteredPayments() {
+          let filtered = this.payments;
+          if (this.statusFilter !== 'all') {
+            filtered = filtered.filter(p => p.status === this.statusFilter);
+          }
+          return [...filtered].sort((a, b) =>
+            this.sortOrder === 'desc'
+              ? b.payment_date.localeCompare(a.payment_date)
+              : a.payment_date.localeCompare(b.payment_date)
+          );
+        },
+
+        /**
+         * Group filteredPayments by "Month Year" for timeline headers.
+         * Returns: [{ label: 'March 2026', payments: [...] }, ...]
+         */
+        get groupedPayments() {
+          const groups = [];
+          const seen = {};
+
+          for (const p of this.filteredPayments) {
+            const label = this.getMonthGroup(p.payment_date);
+            if (!seen[label]) {
+              seen[label] = { label, payments: [] };
+              groups.push(seen[label]);
+            }
+            seen[label].payments.push(p);
+          }
+          return groups;
+        },
+
+        getBreakdown(paymentId) {
+          return this.breakdowns.find(
+            b => b.paymentId === paymentId || b.payment_id === paymentId
+          );
+        },
+
+        formatCurrency(n) {
+          return '£' + Number(n).toLocaleString('en-GB', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        },
+
+        formatDate(d) {
+          return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          });
+        },
+
+        getMonthGroup(date) {
+          return new Date(date + 'T00:00:00').toLocaleDateString('en-GB', {
+            month: 'long',
+            year: 'numeric',
+          });
+        },
+
+        exportPDF() {
+          // Placeholder – will be wired in US-010
+          alert('PDF export coming soon (US-010).');
+        },
+      }));
+    });
+  </script>
+
+</body>
+</html>
